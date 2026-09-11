@@ -116,10 +116,10 @@ grupo deben corregir ambas cosas.
 
 ## 12. Preservación del cuaderno como memoria
 
-- [ ] 12.1 Añadir al inicio del cuaderno una celda de encabezado que declare su condición de registro histórico no ejecutable, con la fecha y el commit en que dejó de serlo, y remita al paquete como fuente de verdad
-- [ ] 12.2 Verificar que el contenido de las demás celdas queda sin alterar respecto al primer commit
-- [ ] 12.3 Verificar que ninguna etapa del pipeline lee ni importa el cuaderno
-- [ ] 12.4 Escribir el README que documenta el uso del paquete, para que el cuaderno no siga siendo el sitio donde se busca cómo correr las cosas
+- [x] 12.1 Añadir al inicio del cuaderno una celda de encabezado que declare su condición de registro histórico no ejecutable, con la fecha y el commit en que dejó de serlo, y remita al paquete como fuente de verdad
+- [x] 12.2 Verificar que el contenido de las demás celdas queda sin alterar respecto al primer commit
+- [x] 12.3 Verificar que ninguna etapa del pipeline lee ni importa el cuaderno
+- [x] 12.4 Escribir el README que documenta el uso del paquete, para que el cuaderno no siga siendo el sitio donde se busca cómo correr las cosas
 
 ## 13. Recalificación y cierre
 
