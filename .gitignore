@@ -1,0 +1,43 @@
+# ── Credenciales ──────────────────────────────────────────────────────────
+# Nunca deben viajar al repositorio: el paquete se distribuye a Colab desde aquí.
+.env
+.env.*
+!.env.example
+apikey.txt
+*.key
+
+# ── Entorno ───────────────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# ── Corpus ────────────────────────────────────────────────────────────────
+# Decenas de MB de tuits con contenido sensible. Se comparten fuera del repo.
+*.csv
+*.xlsx
+*.xlsm
+*.xls
+
+# ── Rúbrica ───────────────────────────────────────────────────────────────
+# El PDF es la fuente de verdad y pesa 4 MB; rubrica.json se regenera de él.
+rubrica_tweets.pdf
+rubrica.json
+
+# ── Checkpoints y salidas ─────────────────────────────────────────────────
+# Append-only, crecen sin límite y contienen las justificaciones del modelo.
+checkpoint*.jsonl
+*.jsonl
+graficas_*.html
+tweets_calificados*.csv
+
+# ── Sistema ───────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
