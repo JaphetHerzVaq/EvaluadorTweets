@@ -331,3 +331,52 @@ def test_estimar_recalificacion_por_alcance(tmp_path: Path) -> None:
                                      escribir=lambda *a: None)
         assert r["total"] == 4
         assert r["recalificar"] == n, f"alcance {alcance}"
+
+
+# ──────────────────────────────────────────────────────────────────────────
+#  Huella de contenido de la rúbrica
+# ──────────────────────────────────────────────────────────────────────────
+
+def _rubrica(descriptor_c1: str = "d" * 80) -> dict:
+    import copy
+    r = {"criterios": copy.deepcopy(CRITERIOS)}
+    r["criterios"][0]["niveles"][0]["descriptor"] = descriptor_c1
+    return r
+
+
+def test_la_huella_ignora_lo_que_no_cambia_el_juicio() -> None:
+    from evaluador.rubrica import huella
+    a, b = _rubrica(), _rubrica()
+    b["criterios"] = list(reversed(b["criterios"]))      # otro orden
+    b["criterios"][0]["nombre"] = "otro nombre"          # otro título
+    assert huella(a) == huella(b)
+
+
+def test_la_huella_cambia_si_cambia_un_descriptor() -> None:
+    from evaluador.rubrica import huella
+    assert huella(_rubrica()) != huella(_rubrica("texto completamente distinto"))
+
+
+def test_reanudar_rehusa_si_los_descriptores_cambiaron(tmp_path: Path) -> None:
+    """El caso que el cotejo de slugs no ve: mismo nombre, otro contenido.
+
+    Ocurrió al anclar la rúbrica a México — tres slugs cambiaron y el cuarto
+    no, aunque sus descriptores sí. Sin esto, ese criterio habría recuperado
+    calificaciones de la rúbrica anterior como si fueran de la vigente.
+    """
+    ckpt = _checkpoint(tmp_path, [("t1", "c1", "OK")])
+    vieja, nueva = _rubrica(), _rubrica("los descriptores fueron reescritos")
+
+    S.registrar_huella(ckpt, vieja)
+    S.verificar_correspondencia(ckpt, CRITERIOS, rubrica=vieja)   # no lanza
+
+    with pytest.raises(RuntimeError, match="otra versión de la rúbrica"):
+        S.verificar_correspondencia(ckpt, CRITERIOS, rubrica=nueva)
+
+    S.verificar_correspondencia(ckpt, CRITERIOS, rubrica=nueva, forzar=True)
+
+
+def test_sin_huella_registrada_no_bloquea(tmp_path: Path) -> None:
+    """Un checkpoint anterior a esta comprobación se sigue pudiendo reanudar."""
+    ckpt = _checkpoint(tmp_path, [("t1", "c1", "OK")])
+    S.verificar_correspondencia(ckpt, CRITERIOS, rubrica=_rubrica())

@@ -59,6 +59,25 @@ filtro_tipo_query = []                # [] = todos; p.ej. ["VICTIMIZACION"]
 # ── Rúbrica ───────────────────────────────────────────────────────────────
 # El PDF es la fuente de verdad. rubrica.json se regenera de él y es el
 # artefacto inspeccionable antes de gastar.
+# Términos que anclan la rúbrica a su objeto de estudio. Cada nivel y cada
+# consigna debería mencionar al menos uno: sin sujeto explícito, el modelo
+# califica lo que encuentre.
+#
+# No es una precaución teórica. Medido sobre la corrida dañada: de 122
+# calificaciones con nivel asignado, 67 (55%) eran sobre tuits que ni
+# siquiera nombran a México — entregas de Amazon en Reino Unido puntuadas
+# como competencia institucional mexicana, un cabaret japonés como
+# fascinación estética hacia la cultura mexicana. Sólo 6 de los 20 niveles
+# mencionaban México, y el criterio con 0 menciones en sus niveles 1-5 llegó
+# al 84% de falsos positivos.
+#
+# Lista vacía = no se verifica el anclaje.
+# Incluye la forma sin acento y la inglesa: la rúbrica mezcla idiomas y una
+# consigna que dice "Mexico's country image" está tan anclada como una que
+# dice «México».
+anclaje = ["méxico", "mexico", "mexicano", "mexicana", "mexicanos",
+           "mexicanas", "mexican"]
+
 rubrica_pdf  = "rubrica_tweets.pdf"
 rubrica_json = "rubrica.json"
 
@@ -231,9 +250,24 @@ n_muestra   = 0                       # 0 = corpus completo
 checkpoint  = "checkpoint.jsonl"
 
 [perfiles.recuperacion]
-descripcion = "Reanuda sobre el checkpoint de la corrida dañada: recupera 7,708 pares y recalifica 2,540."
+# Obsoleto tras el anclaje de la rúbrica a México: los 7,708 pares que este
+# perfil recuperaba se produjeron con el instrumento anterior, cuyos niveles
+# 1-5 no nombraban el país. Se conserva sólo para auditar el checkpoint viejo.
+descripcion = "Checkpoint de la corrida dañada, con la rúbrica ANTERIOR. Sólo para auditoría."
 n_muestra   = 0
 checkpoint  = "checkpoint_recuperado.jsonl"
 salida_ancho = "tweets_calificados_recuperado.csv"
 salida_tidy  = "tweets_calificados_recuperado_tidy.csv"
 salida_html  = "graficas_calificaciones_recuperado.html"
+
+
+[perfiles.anclada]
+# Corrida completa con la rúbrica anclada a México (20/20 niveles nombran el
+# objeto de estudio). Checkpoint nuevo: mezclarla con la anterior produciría
+# columnas que no significan lo mismo en todas las filas.
+descripcion = "Corpus completo con la rúbrica anclada a México. 2,631 tuits × 4 criterios."
+n_muestra   = 0
+checkpoint  = "checkpoint_anclada.jsonl"
+salida_ancho = "tweets_calificados_anclada.csv"
+salida_tidy  = "tweets_calificados_anclada_tidy.csv"
+salida_html  = "graficas_calificaciones_anclada.html"

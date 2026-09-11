@@ -198,6 +198,7 @@ class Config:
     filtro_tipo_query: list[str]
 
     # Rúbrica
+    anclaje: list[str]
     rubrica_pdf: Path
     rubrica_json: Path
 

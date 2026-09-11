@@ -107,20 +107,36 @@ def _etapa_traducir(cfg, args) -> int:
 
 
 def _etapa_rubrica(cfg, args) -> int:
+    from . import rubrica as R
     if args.reparsear or not cfg.rubrica_json.exists():
         print(preparar_entorno_modelo(cfg))
-    _rubrica_y_criterios(cfg, args.reparsear)
+    rub, _ = _rubrica_y_criterios(cfg, args.reparsear)
+    R.verificar_anclaje(cfg, rub)
     return 0
 
 
 def _etapa_correr(cfg, args) -> int:
     from . import corpus as C, scoring as S
 
+    from . import rubrica as R
+
     print(preparar_entorno_modelo(cfg))
-    _, criterios = _rubrica_y_criterios(cfg)
+    rub, criterios = _rubrica_y_criterios(cfg)
+
+    # Antes de estimar nada: una rúbrica sin anclar produce calificaciones
+    # sobre el objeto equivocado, y eso no se detecta después.
+    anclaje = R.verificar_anclaje(cfg, rub)
+    if anclaje.get("verificado") and anclaje["anclados"] < anclaje["total"]:
+        faltan = anclaje["total"] - anclaje["anclados"]
+        print(f"\n⚠️  {faltan} de {anclaje['total']} niveles no nombran el "
+              f"objeto de estudio.")
+        print("    En la corrida anterior eso produjo 67 de 122 calificaciones "
+              "(55%) sobre")
+        print("    tuits de otros países. Revisa la rúbrica antes de autorizar "
+              "el gasto.")
 
     S.verificar_correspondencia(cfg.checkpoint, criterios,
-                                forzar=args.forzar_rubrica_distinta)
+                                forzar=args.forzar_rubrica_distinta, rubrica=rub)
 
     df = C.cargar(cfg)
     ids = C.ids_de_checkpoint(Path(args.ids_de)) if args.ids_de else None
@@ -128,9 +144,12 @@ def _etapa_correr(cfg, args) -> int:
 
     alcance = args.alcance or cfg.alcance_recalificacion
     print()
-    S.estimar_recalificacion(cfg.checkpoint, sub, criterios, cfg, alcance)
+    plan = S.estimar_recalificacion(cfg.checkpoint, sub, criterios, cfg, alcance)
+    if plan["recalificar"] == 0:
+        print("\n✅ Nada pendiente con este alcance: no hay gasto que autorizar.")
+        return 0
     print()
-    S.estimar_costo(cfg, sub, criterios)
+    S.estimar_costo(cfg, sub, criterios, llamadas=plan["recalificar"])
 
     if not args.confirmar:
         print("\n⛔ Gasto no autorizado. Revisa la estimación y vuelve a ejecutar "
@@ -138,7 +157,8 @@ def _etapa_correr(cfg, args) -> int:
         return 1
 
     print()
-    resumen = asyncio.run(S.correr(cfg, sub, criterios, alcance=alcance))
+    resumen = asyncio.run(S.correr(cfg, sub, criterios, alcance=alcance,
+                                   rubrica=rub))
     return 1 if resumen.get("abortada") else 0
 
 

@@ -241,7 +241,14 @@ async def prueba_de_humo(cfg: Config, sub: pd.DataFrame, criterios: list[dict],
 
 def estimar_costo(cfg: Config, sub: pd.DataFrame, criterios: list[dict],
                   modelo: str | None = None, muestra_conteo: int = 15,
-                  escribir=print) -> dict:
+                  llamadas: int | None = None, escribir=print) -> dict:
+    """Estima el gasto de una corrida.
+
+    ``llamadas`` permite estimar sólo el trabajo PENDIENTE en vez de toda la
+    selección. Importa: al reanudar sobre un checkpoint con 7,708 pares ya
+    resueltos, estimar la selección completa exagera el costo por un factor de
+    cuatro, y una compuerta que miente sobre el gasto no sirve para decidir.
+    """
     modelo = modelo or cfg.modelo
     if modelo not in cfg.precios:
         escribir(f"⚠️  Sin precio para '{modelo}'. Añádelo a [precios] en config.toml.")
@@ -270,7 +277,8 @@ def estimar_costo(cfg: Config, sub: pd.DataFrame, criterios: list[dict],
     if cfg.presupuesto_razonamiento != 0:
         tok_out_medio += 500 if cfg.presupuesto_razonamiento < 0 else cfg.presupuesto_razonamiento
 
-    llamadas = len(sub) * n_criterios
+    totales = len(sub) * n_criterios
+    llamadas = totales if llamadas is None else llamadas
     t_in, t_out = llamadas * tok_in_medio, llamadas * tok_out_medio
     costo = t_in / 1e6 * p_in + t_out / 1e6 * p_out
     razona = "apagado" if cfg.presupuesto_razonamiento == 0 else cfg.presupuesto_razonamiento
@@ -280,7 +288,12 @@ def estimar_costo(cfg: Config, sub: pd.DataFrame, criterios: list[dict],
     escribir(f"{'=' * 72}")
     escribir(f"  filas              {len(sub):,}")
     escribir(f"  criterios (N)      {n_criterios}")
-    escribir(f"  llamadas           {llamadas:,}")
+    if llamadas != totales:
+        escribir(f"  pares en total     {totales:,}")
+        escribir(f"  llamadas a emitir  {llamadas:,}   "
+                 f"(el resto se recupera del checkpoint)")
+    else:
+        escribir(f"  llamadas           {llamadas:,}")
     escribir(f"  tokens entrada     {t_in / 1e6:>8.2f} M  (medido: {tok_in_medio:,.0f}/llamada)")
     escribir(f"  tokens salida      {t_out / 1e6:>8.2f} M  (estimado: {tok_out_medio:,.0f}/llamada)")
     escribir(f"  ─────────────────────────────────")
@@ -289,7 +302,7 @@ def estimar_costo(cfg: Config, sub: pd.DataFrame, criterios: list[dict],
     escribir(f"  COSTO TOTAL        ${costo:>8.2f}")
     escribir(f"  por criterio       ${costo / max(n_criterios, 1):>8.2f}")
     filas_vuelo = cfg.filas_en_vuelo(n_criterios)
-    escribir(f"  tiempo aprox.      {len(sub) / filas_vuelo * 8 / 60:>8.0f} min "
+    escribir(f"  tiempo aprox.      {llamadas / n_criterios / filas_vuelo * 8 / 60:>8.0f} min "
              f"({cfg.llamadas_simultaneas} llamadas simultáneas = "
              f"{filas_vuelo} filas en vuelo)")
     escribir(f"{'=' * 72}")
@@ -509,7 +522,7 @@ async def _evaluar_fila(cfg: Config, validador: Validador, runner, fila,
 
 async def correr(cfg: Config, sub: pd.DataFrame, criterios: list[dict],
                  ruta: Path | None = None, equipo=None, alcance: str | None = None,
-                 escribir=print) -> dict:
+                 rubrica: dict | None = None, escribir=print) -> dict:
     """`equipo` permite correr con un ParallelAgent distinto (p.ej. otro modelo
     en la calibración) sin mutar el equipo de producción."""
     ruta = ruta or cfg.checkpoint
@@ -552,6 +565,9 @@ async def correr(cfg: Config, sub: pd.DataFrame, criterios: list[dict],
         escribir(f"   ⚠️  la rúbrica tiene más criterios ({n_criterios}) que el límite "
                  f"de llamadas ({cfg.llamadas_simultaneas}): se procesa una fila a la "
                  f"vez y el abanico supera el límite configurado")
+
+    if rubrica is not None:
+        registrar_huella(ruta, rubrica)
 
     sem = asyncio.Semaphore(filas_vuelo)
     ok = fallidas = 0
@@ -773,15 +789,47 @@ def auditar(ruta: Path, criterios: list[dict] | None = None,
     }
 
 
+def ruta_huella(checkpoint: Path) -> Path:
+    """Archivo lateral donde se guarda la huella de la rúbrica de una corrida."""
+    return checkpoint.with_suffix(checkpoint.suffix + ".rubrica")
+
+
+def registrar_huella(checkpoint: Path, rubrica: dict) -> None:
+    from .rubrica import huella
+    ruta_huella(checkpoint).write_text(huella(rubrica), encoding="utf-8")
+
+
 def verificar_correspondencia(ruta: Path, criterios: list[dict],
-                              forzar: bool = False) -> None:
+                              forzar: bool = False, rubrica: dict | None = None) -> None:
     """Rehúsa reanudar si el checkpoint fue escrito con otra rúbrica.
 
     Mezclar dos rúbricas en un mismo checkpoint produce un CSV cuyas columnas
     no significan lo mismo en todas las filas, y eso no se detecta después.
+
+    Comprueba dos cosas distintas: que los criterios sean los mismos, y que su
+    CONTENIDO no haya cambiado. La segunda importa porque un slug puede
+    sobrevivir a una reescritura completa de los descriptores — ocurrió al
+    anclar esta rúbrica a México: tres slugs cambiaron y el cuarto no, aunque
+    sus descriptores sí.
     """
     if not ruta.exists():
         return
+
+    if rubrica is not None:
+        from .rubrica import huella
+        lateral = ruta_huella(ruta)
+        if lateral.exists():
+            previa, actual = lateral.read_text(encoding="utf-8").strip(), huella(rubrica)
+            if previa != actual and not forzar:
+                raise RuntimeError(
+                    f"El checkpoint '{ruta.name}' se escribió con otra versión de la "
+                    f"rúbrica.\n"
+                    f"  huella registrada: {previa}\n"
+                    f"  huella vigente   : {actual}\n"
+                    f"Los nombres de los criterios pueden coincidir y aun así los "
+                    f"descriptores haber cambiado, que es lo que decide el juicio. "
+                    f"Usa un checkpoint nuevo, o pasa forzar=True si sabes lo que haces."
+                )
     slugs = set()
     with ruta.open(encoding="utf-8") as fh:
         for linea in fh:

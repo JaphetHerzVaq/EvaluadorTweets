@@ -123,8 +123,21 @@ grupo deben corregir ambas cosas.
 
 ## 13. Recalificación y cierre
 
+El plan de recuperación cambió durante la implementación. Al revisar las
+calificaciones reales se encontró que 67 de 122 (55%) eran sobre tuits de
+otros países, porque sólo 5 de 20 niveles de la rúbrica nombraban a México.
+El usuario actualizó el PDF —ahora 20/20— y pidió recalificar todo. Los 7,708
+pares «recuperables» quedan obsoletos: se produjeron con otro instrumento.
+
+- [x] 13.7 Implementar `verificar_anclaje()` y conectarlo al CLI antes de la compuerta de gasto
+- [x] 13.8 Implementar `huella()` de contenido de la rúbrica y rehusar la reanudación cuando cambia, porque cotejar slugs no basta
+- [x] 13.9 Reparsear el PDF anclado y verificar 20/20 niveles con el objeto de estudio nombrado
+- [ ] 13.10 Corrida completa sobre el corpus de 2,631 con la rúbrica anclada, en checkpoint nuevo
+- [ ] 13.11 Verificar sobre el resultado que la proporción de calificaciones sobre tuits sin mención de México bajó respecto al 55% previo
+
+
 - [ ] 13.1 Ejecutar el piloto posterior a los arreglos con la misma semilla y comparar par a par contra el piloto de fidelidad
-- [ ] 13.2 Recalificar los 2,540 pares fallidos sobre el checkpoint recuperado, con la rúbrica de cuatro criterios ya reconciliada
+- [x] 13.2 Obsoleto: con la rúbrica anclada los 7,708 pares previos ya no son válidos. Se sustituye por 13.10, una corrida completa
 - [ ] 13.3 Auditar el checkpoint resultante y confirmar que no quedan pares en estado de fallo
 - [ ] 13.4 Contrastar el costo real de la recalificación contra la estimación previa
 - [ ] 13.5 Exportar y graficar sobre el checkpoint completo, verificando integridad de conteos e identificadores

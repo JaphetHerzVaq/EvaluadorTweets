@@ -189,3 +189,89 @@ def cargar(cfg: Config, forzar_reparseo: bool = False, escribir=print) -> dict:
 
 def criterios(rubrica: dict) -> list[dict]:
     return rubrica["criterios"]
+
+
+# ──────────────────────────────────────────────────────────────────────────
+#  Verificación de anclaje
+# ──────────────────────────────────────────────────────────────────────────
+
+def verificar_anclaje(cfg: Config, rubrica: dict, escribir=print) -> dict:
+    """Comprueba que cada nivel y cada consigna nombren el objeto de estudio.
+
+    Un nivel sin sujeto explícito no acota nada: el modelo califica la
+    competencia institucional que encuentre, sea de México o de una tienda en
+    línea del Reino Unido.
+
+    Medido sobre la corrida dañada, antes de existir esta comprobación: de 122
+    calificaciones con nivel asignado, 67 (55%) eran sobre tuits que no nombran
+    a México. El criterio cuyos niveles 1-5 no mencionaban el país llegó al 84%
+    de falsos positivos; el único con el ancla en todos sus niveles se quedó en
+    52%. La correlación es difícil de leer de otra manera.
+
+    Sólo advierte: la rúbrica es el instrumento de quien investiga, no algo que
+    este código deba imponer.
+    """
+    terminos = [t.lower() for t in (cfg.anclaje or [])]
+    if not terminos:
+        return {"verificado": False}
+
+    def ancla(texto: str) -> bool:
+        b = str(texto or "").lower()
+        return any(t in b for t in terminos)
+
+    sin_ancla: list[str] = []
+    total = anclados = 0
+    escribir(f"\n{'=' * 72}")
+    escribir(f"ANCLAJE · ¿cada nivel nombra su objeto? {terminos}")
+    escribir(f"{'=' * 72}")
+
+    for c in rubrica["criterios"]:
+        faltan = [str(n["etiqueta"]) for n in c["niveles"] if not ancla(n.get("descriptor"))]
+        total += len(c["niveles"])
+        anclados += len(c["niveles"]) - len(faltan)
+        cons = ancla(c.get("consigna"))
+        marca = "✅" if not faltan and cons else "⚠️ "
+        escribir(f"  {marca} [{c['id_criterio']}] {c['nombre'][:46]}")
+        escribir(f"        consigna {'ancla' if cons else 'SIN ANCLA'} · "
+                 f"niveles anclados {len(c['niveles']) - len(faltan)}/{len(c['niveles'])}")
+        if faltan:
+            escribir(f"        niveles sin ancla: {faltan}")
+            sin_ancla.append(c["slug"])
+        if not cons:
+            escribir(f"        consigna: {str(c.get('consigna'))[:90]}")
+
+    escribir(f"\n  {anclados}/{total} niveles nombran el objeto de estudio")
+    if anclados < total:
+        escribir(f"\n  ⚠️  Los niveles sin ancla no acotan el juicio. Un tuit que evalúa")
+        escribir(f"      la eficacia de CUALQUIER institución encaja en un descriptor que")
+        escribir(f"      dice sólo «competencia institucional», y el modelo lo califica.")
+        escribir(f"      Antes de gastar en una corrida, conviene que cada descriptor")
+        escribir(f"      diga de qué país habla.")
+    escribir(f"{'=' * 72}")
+    return {"verificado": True, "total": total, "anclados": anclados,
+            "criterios_incompletos": sin_ancla}
+
+
+def huella(rubrica: dict) -> str:
+    """Resumen del CONTENIDO de la rúbrica, no de sus nombres.
+
+    Existe porque comparar slugs no basta. Al anclar la rúbrica a México
+    cambiaron tres de los cuatro slugs, y la comprobación de correspondencia
+    los detectó — pero el cuarto conservó el suyo mientras sus descriptores
+    cambiaban por completo. Reanudar sobre él habría recuperado calificaciones
+    de la rúbrica anterior como si fueran de la vigente, en silencio.
+
+    Entra todo lo que el modelo llega a ver: consigna, etiquetas y
+    descriptores. No entra el orden de los criterios ni sus nombres, que no
+    cambian el juicio.
+    """
+    import hashlib
+
+    partes = []
+    for c in sorted(rubrica["criterios"], key=lambda x: x["slug"]):
+        partes.append(c["slug"])
+        partes.append(str(c.get("consigna") or ""))
+        for n in c["niveles"]:
+            partes.append(f"{n['etiqueta']}{n.get('descriptor') or ''}")
+    crudo = "".join(partes).encode("utf-8")
+    return hashlib.blake2s(crudo, digest_size=8).hexdigest()
