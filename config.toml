@@ -127,9 +127,12 @@ escala_niveles = "divergente"
 #   sin declarar → ningún nivel es de ausencia; se grafican todos
 # ADVERTENCIA: correcto para los criterios ordinales 1 a 3, donde el 0 es
 # ausencia. Exactamente inverso para el criterio binario de saliencia de
-# violencia, donde el 0 es un hallazgo sustantivo. Latente hoy porque ningún
-# nivel «0» se ha asignado nunca: la regla 1 de la instrucción lo intercepta
-# antes y devuelve aplicable=false.
+# violencia, donde el 0 es un hallazgo sustantivo.
+# Medido sobre los 7,708 pares resueltos de la corrida dañada: el nivel «0» se
+# asignó 12 veces (0.16%) frente a 7,586 aplicable=false. La regla 1 de la
+# instrucción intercepta casi siempre, pero no siempre, así que la misma
+# situación semántica quedó codificada de dos formas y esos 12 ceros no son
+# comparables con el resto.
 niveles_ausencia = "auto"
 
 umbral_muestra_pequena  = 100         # menos tuits que esto en la selección → advertir

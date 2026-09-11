@@ -34,13 +34,15 @@
 
 ## 5. Traslado de las etapas de preparación
 
-- [ ] 5.1 Trasladar a `adk.py` las utilidades compartidas: construcción del modelo, configuración de generación y ejecución de agente con recolección de estado
-- [ ] 5.2 Trasladar a `rubrica.py` el esquema, la carga del PDF, el parseo, la asignación de slugs, la anotación de escala y el resumen
-- [ ] 5.3 Regenerar `rubrica.json` desde el PDF vigente y verificar que produce los cuatro criterios: tres ordinales 0–5 y el binario 0/1 de saliencia de violencia
-- [ ] 5.4 Verificar que los slugs del `rubrica.json` regenerado coinciden con los presentes en el checkpoint a recuperar
-- [ ] 5.5 Trasladar a `corpus.py` la reparación desde `raw_json`, la carga de CSV y Excel, la selección de subconjunto, la detección de contexto incompleto y la construcción del payload
+- [x] 5.1 Trasladar a `adk.py` las utilidades compartidas: construcción del modelo, configuración de generación y ejecución de agente con recolección de estado
+- [x] 5.2 Trasladar a `rubrica.py` el esquema, la carga del PDF, el parseo, la asignación de slugs, la anotación de escala y el resumen
+- [x] 5.3 Regenerar `rubrica.json` desde el PDF vigente y verificar que produce los cuatro criterios: tres ordinales 0–5 y el binario 0/1 de saliencia de violencia
+- [x] 5.4 Verificar que los slugs del `rubrica.json` regenerado coinciden con los presentes en el checkpoint a recuperar
+- [x] 5.5 Trasladar a `corpus.py` la reparación desde `raw_json`, la carga de CSV y Excel, la selección de subconjunto, la detección de contexto incompleto y la construcción del payload
+- [ ] 5.8 Reincorporar el complemento reexportado con los identificadores intactos y verificar que las 69 filas quedan con id de 19 dígitos _(bloqueada: espera el archivo del usuario)_
+- [ ] 5.9 Excluir de toda corrida las filas cuyo identificador no tenga 19 dígitos, para que no se sobrescriban entre sí en el checkpoint
 - [ ] 5.6 Trasladar a `traduccion.py` el esquema, la instrucción y el motor de traducción reanudable, conservando sin cambios el rodeo por hilo del cliente síncrono
-- [ ] 5.7 Verificar que la reparación y la traducción se saltan solas cuando sus salidas ya existen, sin recalcular ni gastar
+- [x] 5.7 Verificar que la reparación y la traducción se saltan solas cuando sus salidas ya existen, sin recalcular ni gastar
 
 ## 6. Traslado del motor de corrida, sin arreglos todavía
 
@@ -52,8 +54,8 @@
 
 ## 7. Piloto de fidelidad del traslado
 
-- [ ] 7.1 Ejecutar un piloto de 60 filas con la semilla original sobre el paquete trasladado, escribiendo a un checkpoint nuevo
-- [ ] 7.2 Comparar par a par contra `checkpoint_piloto.jsonl` y documentar cualquier divergencia antes de continuar
+- [ ] 7.1 Ejecutar el piloto sobre los 60 tuits exactos de `checkpoint_piloto.jsonl`, seleccionados por lista explícita de identificadores y no por semilla: el corpus creció de 2,562 a 2,631 filas y la misma semilla ya sólo reproduce 1 de los 60
+- [ ] 7.2 Comparar par a par contra `checkpoint_piloto.jsonl` sobre los 3 criterios comunes y documentar cualquier divergencia antes de continuar (el cuarto criterio, saliencia de violencia, no existía en el piloto original y no es comparable)
 - [ ] 7.3 Confirmar que el traslado no alteró la distribución de estados ni el contenido de las justificaciones más allá de la variación esperada del modelo
 
 ## 8. Fiabilidad del motor de corrida

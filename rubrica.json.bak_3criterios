@@ -1,0 +1,169 @@
+{
+  "criterios": [
+    {
+      "id_criterio": "RÚBRICA 1",
+      "nombre": "DIMENSIÓN SIMPÁTICA / EMOCIONAL (sympathetic/emotional dimension - \"atmósfera\")",
+      "consigna": "Componente afectivo del modelo 4D. Buhmann & Ingenhoff la definen como los sentimientos generales de simpatía y fascinación hacia un país — su \"ability to attract\". Operacionalizada con indicadores reflectivos (Buhmann & Ingenhoff 2015; tres ítems retenidos tras EFA, cargas ≥ .70): fascinación por el país (country fascination, carga .78), simpatía por el país (sympathy for the country, carga .89) y atractivo del país (country attractiveness, carga .73); fiabilidad Cronbach's α = .77, AVE = .69. Mide la emoción del emisor hacia México y su gente: agrado, calidez, fascinación, atracción afectiva, hospitalidad experimentada, deseo de volver/quedarse — o sus contrarios (rechazo, desprecio, miedo afectivo, hostilidad). Clave distintiva: capta el estado afectivo del hablante hacia el país, no un juicio sobre un objeto cultural concreto (eso es estético) ni sobre una competencia institucional (eso es funcional). Indicadores/subtemas que cuentan como \"tocar\" la dimensión (INCLUIDOS): expresiones de agrado o cariño hacia México/los mexicanos (\"I love this country\", \"me encanta la gente\"); fascinación/encanto afectivo (\"I'm obsessed with Mexico\"); atracción y deseo de volver o quedarse (\"I never want to leave\", \"ya quiero regresar\"); percepción de calidez/hospitalidad de la gente (\"the friendliest people I've ever met\"); orgullo afectivo o identificación emocional; y sus contrarios: rechazo/desprecio (\"I hate it here\"), miedo afectivo o incomodidad emocional hacia el país/gente (\"this place scares me\"), decepción afectiva. EXCLUIDOS (van a otra dimensión): juicio sobre un bien cultural concreto sin emoción hacia el país (→ estética); evaluación de infraestructura/organización/seguridad institucional (→ funcional); mención neutra de un hecho violento sin afecto (→ saliencia de violencia). El miedo afectivo difuso hacia el país (\"I'm terrified of Mexico\") es simpática negativa; la crítica a la gestión de seguridad (\"the police did nothing\") es funcional; el reporte del hecho (\"a shooting near the stadium\") es saliencia.",
+      "niveles": [
+        {
+          "etiqueta": "0",
+          "puntos": 0.0,
+          "descriptor": "El tuit no expresa ninguna emoción del emisor hacia México ni su gente. Puede tratar de fútbol, logística o cultura sin carga afectiva hacia el país."
+        },
+        {
+          "etiqueta": "1",
+          "puntos": 1.0,
+          "descriptor": "Emoción fuertemente negativa hacia el país/gente: odio, desprecio, rechazo explícito, miedo afectivo intenso, hostilidad (\"I hate this country\", \"asco de gente\")."
+        },
+        {
+          "etiqueta": "2",
+          "puntos": 2.0,
+          "descriptor": "Emoción negativa moderada: desagrado, decepción, incomodidad, frialdad, ligera antipatía (\"kind of disappointed with the vibe\", \"no me sentí cómodo\")."
+        },
+        {
+          "etiqueta": "3",
+          "puntos": 3.0,
+          "descriptor": "Emoción neutral, mixta o ambivalente: coexisten afectos positivos y negativos, o afecto tibio/indeciso (\"mixed feelings about the people here\", \"unos amables, otros no\")."
+        },
+        {
+          "etiqueta": "4",
+          "puntos": 4.0,
+          "descriptor": "Emoción positiva: agrado claro, simpatía, calidez percibida, gusto por la gente/país sin llegar a fascinación superlativa (\"really enjoying the friendly atmosphere\", \"buena onda la gente\")."
+        },
+        {
+          "etiqueta": "5",
+          "puntos": 5.0,
+          "descriptor": "Emoción fuertemente positiva / fascinación: amor, encantamiento, atracción máxima, deseo intenso de volver/quedarse, superlativos afectivos (\"I'm in love with Mexico and its people\", \"la gente más cálida del mundo, no me quiero ir\")."
+        }
+      ],
+      "slug": "rubrica_1_dimension_simpatic",
+      "escala_numerica": true,
+      "etiquetas_validas": [
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5"
+      ],
+      "puntos_validos": [
+        0.0,
+        1.0,
+        2.0,
+        3.0,
+        4.0,
+        5.0
+      ]
+    },
+    {
+      "id_criterio": "RÚBRICA 2",
+      "nombre": "DIMENSIÓN ESTÉTICA (aesthetic dimension - \"imagen cultural\")",
+      "consigna": "Componente cognitivo. Buhmann & Ingenhoff la definen como las creencias específicas sobre las cualidades estéticas y la belleza/atractivo de un país como lugar cultural y escénico. Se añadió al modelo de reputación corporativa precisamente porque los atributos de Smith de \"public culture, traditions and territory\" no encajaban en las dimensiones funcional o normativa. Operacionalizada con cuatro indicadores formativos verbatim (Buhmann & Ingenhoff 2015, Tabla II): bienes culturales (cultural goods, peso.25), gastronomía (culinary, peso.28), historia y tradición (history and tradition, peso.29 - el factor de mayor peso en el estudio de EE.UU./viaje), y paisajes/escenografía (landscapes and scenery, peso .18). Clave distintiva: capta un juicio evaluativo sobre el objeto cultural/escénico (la comida, la música, las ruinas, el paisaje), no la emoción del hablante hacia el país en general (eso es simpática). Indicadores/subtemas INCLUIDOS: gastronomía y bebida (tacos, mole, mezcal, comida callejera); bienes culturales y arte (muralismo, artesanía, arquitectura, museos, Frida Kahlo); historia y tradiciones/costumbres (Día de Muertos, ruinas prehispánicas, herencia azteca/maya, mariachi); música y danza como cultura; paisajes y belleza escénica (playas, cenotes, desiertos, ciudades coloniales); deporte como fenómeno cultural/estético (la fiesta, el colorido, el folclore del aficionado) — no el resultado deportivo en sí. EXCLUIDOS: emoción difusa hacia el país/gente sin referirse a un objeto cultural (→ simpática); infraestructura, economía, organización del torneo, transporte (→ funcional); mención de violencia (→ saliencia). Ejemplo de frontera: \"the food scene is world-class\" es estético 5; \"I love Mexico\" es simpática; \"the stadium wifi is great\" es funcional.",
+      "niveles": [
+        {
+          "etiqueta": "0",
+          "puntos": 0.0,
+          "descriptor": "El tuit no evalúa ningún objeto cultural, gastronómico, histórico, artístico o escénico de México."
+        },
+        {
+          "etiqueta": "1",
+          "puntos": 1.0,
+          "descriptor": "Juicio fuertemente negativo sobre la cultura/gastronomía/historia/paisaje: desprecio o repulsión hacia el objeto cultural (\"Mexican food is disgusting garbage\", \"arte feísimo\")."
+        },
+        {
+          "etiqueta": "2",
+          "puntos": 2.0,
+          "descriptor": "Juicio negativo moderado: crítica o baja valoración del objeto cultural sin repulsión total (\"the food was kind of bland\", \"las ruinas están descuidadas\")."
+        },
+        {
+          "etiqueta": "3",
+          "puntos": 3.0,
+          "descriptor": "Juicio neutral, mixto o meramente descriptivo con evaluación ambivalente: menciona/describe el objeto cultural sin valencia clara, o mezcla elogio y crítica (\"the food is interesting, some dishes great, others too spicy for me\")."
+        },
+        {
+          "etiqueta": "4",
+          "puntos": 4.0,
+          "descriptor": "Juicio positivo: valoración favorable del objeto cultural (\"the tacos here are really good\", \"bonita arquitectura colonial\")."
+        },
+        {
+          "etiqueta": "5",
+          "puntos": 5.0,
+          "descriptor": "Juicio fuertemente positivo / fascinación estética: elogio superlativo, riqueza cultural excepcional, belleza deslumbrante (\"the most breathtaking cuisine and culture on the planet\", \"el arte y la historia más impresionantes que he visto\")."
+        }
+      ],
+      "slug": "rubrica_2_dimension_estetica",
+      "escala_numerica": true,
+      "etiquetas_validas": [
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5"
+      ],
+      "puntos_validos": [
+        0.0,
+        1.0,
+        2.0,
+        3.0,
+        4.0,
+        5.0
+      ]
+    },
+    {
+      "id_criterio": "RÚBRICA 3",
+      "nombre": "DIMENSIÓN FUNCIONAL (functional dimension - \"perspectiva política\")",
+      "consigna": "Componente cognitivo. Buhmann & Ingenhoff la definen como las creencias específicas sobre las competencias y competitividad de un país, su efectividad y desempeño político y económico. Operacionalizada con 12 indicadores formativos verbatim (Buhmann & Ingenhoff 2015, Tabla II): innovación del país, productos y servicios nacionales, competencia de las empresas nacionales, prosperidad/riqueza, fuerza económica (economic strength, peso .31, significativo), mercados laborales, competencias del liderazgo político (competences of political leadership, peso .43 – el factor dominante en el estudio de EE.UU./viaje), estabilidad política (political stability, peso .33, significativo), infraestructura, innovación en investigación, oportunidades educativas y nivel educativo. Para el contexto Mundial 2026 se añaden como subtemas funcionales: organización del torneo, logística, transporte, y seguridad institucional entendida como competencia de gestión (no el hecho violento). Clave distintiva: capta la eficacia/competencia institucional u organizativa, no la emoción ni el objeto cultural. Nota sobre dependencia de muestra: el segundo estudio de Buhmann (2016) reportó pesos distintos para el mismo instrumento – allí \"quality of products and services explains most of the variance\" de la dimensión funcional, seguido de estabilidad política e infraestructura. Es decir, el indicador funcional dominante varía con la muestra (liderazgo político vs. calidad de productos), lo que refuerza que en tuits del Mundial los subtemas dominantes serán probablemente organización, seguridad-gestión e infraestructura. Indicadores/subtemas INCLUIDOS: economía, prosperidad, productos/servicios, empresas, mercados laborales; política, estabilidad política, competencia del gobierno/liderazgo, instituciones; infraestructura (estadios, aeropuertos, transporte, wifi, hoteles); ciencia, investigación, innovación, educación; organización y logística del torneo (fluidez de accesos, boletaje, señalización, filas); gestión de la seguridad como desempeño institucional (\"el operativo funcionó\", \"la policía respondió rápido\", \"Plan Kukulkán bien ejecutado\" o su contrario \"seguridad improvisada\", \"caos en los accesos\"). EXCLUIDOS: emoción hacia el país/gente (→ simpática); comida/cultura/paisaje (→ estética); la mención del hecho violento en sí — un tiroteo, una desaparición, un bloqueo — cuando se reporta como evento (→ saliencia de violencia, variable aparte). La frontera funcional/violencia es crítica: \"there was a shooting near the fan zone\" = saliencia (hecho); \"the authorities completely failed to secure the fan zone\" = funcional negativo (juicio sobre la competencia de gestión). Un mismo tuit puede puntuar en ambas (son variables distintas).",
+      "niveles": [
+        {
+          "etiqueta": "0",
+          "puntos": 0.0,
+          "descriptor": "El tuit no evalúa ninguna competencia económica, política, institucional, de infraestructura, educativa/científica ni de organización/logística/gestión de seguridad de México."
+        },
+        {
+          "etiqueta": "1",
+          "puntos": 1.0,
+          "descriptor": "Juicio fuertemente negativo sobre la competencia/eficacia institucional: fracaso rotundo, colapso, incompetencia grave (\"total institutional collapse, nothing works, government completely failed\")."
+        },
+        {
+          "etiqueta": "2",
+          "puntos": 2.0,
+          "descriptor": "Juicio negativo moderado: deficiencia, ineficiencia o crítica acotada (\"the transport to the stadium was poorly organized\", \"los accesos fueron un desorden\")."
+        },
+        {
+          "etiqueta": "3",
+          "puntos": 3.0,
+          "descriptor": "Juicio neutral, mixto o descriptivo: menciona lo funcional sin valencia clara, o mezcla aciertos y fallas (\"the security operation was huge but caused long queues\")."
+        },
+        {
+          "etiqueta": "4",
+          "puntos": 4.0,
+          "descriptor": "Juicio positivo: competencia/eficacia favorable (\"the stadium infrastructure is excellent\", \"el operativo estuvo bien organizado\")."
+        },
+        {
+          "etiqueta": "5",
+          "puntos": 5.0,
+          "descriptor": "Juicio fuertemente positivo: excelencia organizativa/institucional excepcional (\"flawless organization, world-class infrastructure, the best-run tournament ever\", \"logística impecable, un ejemplo mundial\")."
+        }
+      ],
+      "slug": "rubrica_3_dimension_funciona",
+      "escala_numerica": true,
+      "etiquetas_validas": [
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5"
+      ],
+      "puntos_validos": [
+        0.0,
+        1.0,
+        2.0,
+        3.0,
+        4.0,
+        5.0
+      ]
+    }
+  ]
+}
