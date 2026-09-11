@@ -1,37 +1,36 @@
 ## 1. Credencial y control de versiones
 
-- [ ] 1.1 Crear `.gitignore` que excluya la credencial, los CSV y XLSX del corpus, los checkpoints, los artefactos de salida y el entorno virtual
-- [ ] 1.2 Mover la clave de `apikey.txt` a variable de entorno o a un archivo ignorado por git, y eliminar `apikey.txt` del árbol del proyecto
-- [ ] 1.3 Verificar que ningún archivo rastreable contiene la clave, incluido el `.ipynb`
-- [ ] 1.4 Inicializar el repositorio y hacer el primer commit con el cuaderno original íntegro, para tener punto de reversa
-- [ ] 1.5 Decidir y registrar en `design.md` si la distribución a Colab será por repositorio o por archivo comprimido (pregunta abierta)
+- [x] 1.1 Crear `.gitignore` que excluya la credencial, los CSV y XLSX del corpus, los checkpoints, los artefactos de salida y el entorno virtual
+- [x] 1.2 Mover la clave de `apikey.txt` a variable de entorno o a un archivo ignorado por git, y eliminar `apikey.txt` del árbol del proyecto
+- [x] 1.3 Verificar que ningún archivo rastreable contiene la clave, incluido el `.ipynb`
+- [x] 1.4 Inicializar el repositorio y hacer el primer commit con el cuaderno original íntegro, para tener punto de reversa
+- [x] 1.5 Resuelto: no hay distribución. El usuario descartó Colab como destino; todo corre en local y el cuaderno se conserva como memoria. Registrado en `design.md` y en `proposal.md`
 
 ## 2. Entorno y esqueleto del paquete
 
-- [ ] 2.1 Crear entorno virtual y `requirements.txt` con versiones fijadas de `google-adk`, `google-genai`, `pandas` y `openpyxl`
-- [ ] 2.2 Verificar que las versiones fijadas importan y que `Gemini(retry_options=...)` sigue siendo un campo válido en la versión elegida
-- [ ] 2.3 Registrar la decisión de versión de Python y caer a 3.12 o 3.13 si 3.14 presenta incompatibilidad con ADK
-- [ ] 2.4 Crear `pyproject.toml` y el paquete `evaluador/` con los módulos vacíos: `config`, `io_`, `adk`, `rubrica`, `corpus`, `traduccion`, `scoring`, `export`, `viz`, `__main__`
-- [ ] 2.5 Verificar que `import evaluador` funciona desde el entorno virtual
+- [x] 2.1 Crear entorno virtual y `requirements.txt` con versiones fijadas de `google-adk`, `google-genai`, `pandas` y `openpyxl`, sin `nest_asyncio`
+- [x] 2.2 Verificar que las versiones fijadas importan y que `Gemini(retry_options=...)` sigue siendo un campo válido en la versión elegida
+- [x] 2.3 Registrar la decisión de versión de Python y caer a 3.12 o 3.13 si 3.14 presenta incompatibilidad con ADK
+- [x] 2.4 Crear `pyproject.toml` y el paquete `evaluador/` con los módulos vacíos: `config`, `adk`, `rubrica`, `corpus`, `traduccion`, `scoring`, `export`, `viz`, `__main__`
+- [x] 2.5 Verificar que `import evaluador` funciona desde el entorno virtual
 
 ## 3. Configuración por perfiles
 
-- [ ] 3.1 Definir el esquema de `config.toml` con los perfiles `piloto` y `completo`, trasladando los parámetros de la celda CONFIG
-- [ ] 3.2 Implementar la carga de perfiles con `tomllib` y la selección por bandera
-- [ ] 3.3 Trasladar `_validar_periodos` y mantener su validación de solapamiento y orden cronológico
-- [ ] 3.4 Implementar la carga de la credencial desde variable de entorno o archivo ignorado, sin imprimir su valor
-- [ ] 3.5 Emitir al arrancar cada etapa el reporte de perfil activo y parámetros que determinan gasto y destino
-- [ ] 3.6 Verificar que un nombre de perfil inexistente termina con un error que enumera los disponibles
-- [ ] 3.7 Verificar que la ausencia de credencial termina con error accionable y sin emitir llamadas
+- [x] 3.1 Definir el esquema de `config.toml` con los perfiles `piloto` y `completo`, trasladando los parámetros de la celda CONFIG
+- [x] 3.2 Implementar la carga de perfiles con `tomllib` y la selección por bandera
+- [x] 3.3 Trasladar `_validar_periodos` y mantener su validación de solapamiento y orden cronológico
+- [x] 3.4 Implementar la carga de la credencial desde variable de entorno o archivo ignorado, sin imprimir su valor
+- [x] 3.5 Emitir al arrancar cada etapa el reporte de perfil activo y parámetros que determinan gasto y destino
+- [x] 3.6 Verificar que un nombre de perfil inexistente termina con un error que enumera los disponibles
+- [x] 3.7 Verificar que la ausencia de credencial termina con error accionable y sin emitir llamadas
 
-## 4. Adaptador de entorno
+## 4. Eliminación de las dependencias de entorno alojado
 
-- [ ] 4.1 Implementar `io_.py` con la detección única de entorno por disponibilidad de capacidades
-- [ ] 4.2 Implementar la obtención de archivos de entrada: error con ruta esperada en local, subida interactiva en el entorno alojado
-- [ ] 4.3 Implementar la entrega de salidas: escritura siempre a disco, entrega adicional opcional que no puede hacer fallar la etapa
-- [ ] 4.4 Implementar la política de bucle de eventos: parche de reentrada sólo cuando el entorno ya tiene bucle corriendo
-- [ ] 4.5 Implementar la presentación de HTML: archivo siempre, visualización incrustada sólo donde el entorno la soporta
-- [ ] 4.6 Verificar que ningún módulo del pipeline distinto de `io_.py` importa bibliotecas del entorno alojado
+- [ ] 4.1 Implementar la utilidad de lectura de insumos que falla con la ruta esperada y la etapa que la produce, sin módulo adaptador
+- [ ] 4.2 Verificar que ningún módulo del paquete importa bibliotecas de entorno de cuaderno alojado
+- [ ] 4.3 Verificar que `nest_asyncio` no figura en las dependencias declaradas ni se importa en ningún módulo
+- [ ] 4.4 Confirmar que las corrutinas se ejecutan con `asyncio.run()` y que la prueba de humo pasa sin parche de reentrada
+- [ ] 4.5 Confirmar que la etapa de graficación escribe el HTML a disco y reporta su ruta, sin intentar visualización incrustada
 
 ## 5. Traslado de las etapas de preparación
 
@@ -101,13 +100,12 @@
 - [ ] 11.4 Verificar que una etapa con su salida ya presente informa y termina sin recalcular
 - [ ] 11.5 Ejecutar el pipeline completo de extremo a extremo en local sobre el perfil `piloto`
 
-## 12. Adelgazamiento del cuaderno
+## 12. Preservación del cuaderno como memoria
 
-- [ ] 12.1 Sustituir la lógica de las celdas por importaciones del paquete, conservando la prosa explicativa existente
-- [ ] 12.2 Añadir la celda de arranque que instala o clona el paquete en el entorno alojado
-- [ ] 12.3 Verificar que el cuaderno corre de principio a fin en una sesión limpia de Colab, sin estado residual
-- [ ] 12.4 Confirmar que la misma etapa con el mismo perfil produce artefactos equivalentes por línea de comandos y por cuaderno
-- [ ] 12.5 Confirmar que ninguna celda redefine lógica del pipeline
+- [ ] 12.1 Añadir al inicio del cuaderno una celda de encabezado que declare su condición de registro histórico no ejecutable, con la fecha y el commit en que dejó de serlo, y remita al paquete como fuente de verdad
+- [ ] 12.2 Verificar que el contenido de las demás celdas queda sin alterar respecto al primer commit
+- [ ] 12.3 Verificar que ninguna etapa del pipeline lee ni importa el cuaderno
+- [ ] 12.4 Escribir el README que documenta el uso del paquete, para que el cuaderno no siga siendo el sitio donde se busca cómo correr las cosas
 
 ## 13. Recalificación y cierre
 

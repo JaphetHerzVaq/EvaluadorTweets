@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "evaluador-tweets"
+version = "0.1.0"
+description = "Califica tuits contra una rúbrica en PDF usando agentes paralelos de Google ADK"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "google-adk==1.26.0",
+    "google-genai==1.66.0",
+    "pandas>=2.2,<3.0",
+    "openpyxl==3.1.5",
+]
+
+# requires-python acota por los dos lados a propósito:
+#   >=3.11  por tomllib en la biblioteca estándar, que usan los perfiles
+#   <3.14   porque 3.14 está por delante del soporte declarado de ADK y este
+#           pipeline emite decenas de miles de llamadas de pago
+# El entorno de desarrollo verificado es 3.12.10.
+
+[project.scripts]
+evaluador = "evaluador.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["evaluador*"]

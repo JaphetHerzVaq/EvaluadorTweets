@@ -27,7 +27,9 @@ Tres defectos del motor convirtieron ese tropiezo en pérdida permanente:
 
 Estado actual del dato: **7,708 pares sanos (75.2%)**, **2,540 cementados (24.8%, ~635 tweets)**. Verificado además que ningún par tuvo un resultado bueno sobrescrito por un fallo posterior, así que la política `drop_duplicates(keep="last")` de `cargar_resultados` no ha destruido nada.
 
-Restricciones que enmarcan el diseño: Colab se conserva como destino; el traslado es total (todas las etapas, no sólo el motor); el entorno local es Windows con Python 3.14 y `google-adk 1.26.0` / `google-genai 1.66.0` ya instalados; el proyecto todavía no está bajo control de versiones y `apikey.txt` está en el árbol en texto plano.
+Restricciones que enmarcan el diseño: **todo corre en local y nada vuelve a Colab**; el cuaderno se conserva como memoria del proyecto, no como interfaz ejecutable; el traslado es total (todas las etapas, no sólo el motor); el entorno local es Windows con Python 3.14 y `google-adk 1.26.0` / `google-genai 1.66.0` ya instalados; el proyecto todavía no está bajo control de versiones y `apikey.txt` está en el árbol en texto plano.
+
+La decisión de abandonar Colab como destino simplifica el diseño más de lo que parece: sin dualidad de entorno no hay adaptador que escribir, no hay parche de reentrada del bucle de eventos, no hay subida ni descarga de archivos, y no hay que distribuir el paquete a ninguna parte.
 
 ## Goals / Non-Goals
 
@@ -38,8 +40,8 @@ Restricciones que enmarcan el diseño: Colab se conserva como destino; el trasla
 - Que la concurrencia declarada sea la concurrencia real.
 - Que un error de programación aborte la corrida de inmediato con su traceback, en vez de consumirse en reintentos.
 - Recuperar los 7,708 pares ya pagados y recalificar sólo los 2,540 fallidos.
-- Que el mismo código corra en local y en Colab, con una sola definición de cada función.
-- Conservar íntegra la prosa del cuaderno: las limitaciones conocidas, la justificación de los cortes de período, las notas sobre `nest_asyncio` y ADK. Es documentación ganada con dolor.
+- Que exista una sola definición de cada función del pipeline, en el paquete.
+- Conservar íntegro el cuaderno como memoria del proyecto: las limitaciones conocidas, la justificación de los cortes de período, las notas sobre `nest_asyncio` y ADK. Es documentación ganada con dolor, y su valor no depende de que siga siendo ejecutable.
 
 **Non-Goals:**
 
@@ -51,17 +53,20 @@ Restricciones que enmarcan el diseño: Colab se conserva como destino; el trasla
 
 ## Decisions
 
-### 1. Paquete importado + cuaderno delgado, no monolito ni `nbconvert`
+### 1. Paquete ejecutable + cuaderno congelado como memoria, no monolito ni `nbconvert`
 
-Se extrae la lógica a `evaluador/` y el `.ipynb` pasa a importarla.
+Se extrae la lógica a `evaluador/` y el `.ipynb` deja de ejecutarse. No se adelgaza para importar el paquete: se conserva tal cual, como registro de cómo se llegó al diseño actual.
 
 | Alternativa | Por qué no |
 |---|---|
-| `evaluador.py` monolítico | Concatenar 2,800 líneas conserva el problema de navegación y tira la prosa del cuaderno |
+| `evaluador.py` monolítico | Concatenar 2,800 líneas conserva el problema de navegación |
 | `nbconvert --execute` / papermill | No arregla nada: el estado oculto y el orden de celdas siguen ahí; sólo automatiza el disparo |
 | Sólo portar el motor, dejar el resto en celdas | Descartado por el usuario (traslado total), y dejaría la misma frontera frágil entre celda 22 y 25 |
+| Cuaderno delgado que importa el paquete | Descartado por el usuario: el cuaderno no debe accionar nada. Mantenerlo ejecutable obligaría a una celda de arranque que instala el paquete, y esa celda vuelve a ser un punto de fallo de orden — el mismo que causó la corrida 20 |
 
 La resolución de nombres al importar es el punto entero del ejercicio: `from evaluador.scoring import evaluar_payload` revienta en el segundo cero si el símbolo no existe. Es estructuralmente imposible reproducir el fallo de la corrida 20.
+
+Que el cuaderno deje de ser ejecutable no lo degrada: lo libera. Ya no tiene que mantenerse sincronizado con el código, y por tanto no puede divergir en silencio. La prosa que contiene —por qué el corte es el 6 de julio, por qué el primer período empieza el 31 de mayo, por qué el cliente asíncrono no sobrevive a `nest_asyncio`— es conocimiento que ningún módulo va a albergar mejor.
 
 ### 2. La frontera entre módulos es el artefacto en disco, no la llamada a función
 
@@ -136,11 +141,13 @@ Se lanza una excepción interna con las claves faltantes. El reintento existente
 
 Pasa a base 2, `max_delay` acotado y `jitter` activo, para que los reintentos no se sincronicen entre las llamadas en vuelo.
 
-### 8. Un solo adaptador de entorno, detectado por capacidad
+### 8. Las dependencias del entorno alojado se eliminan, no se abstraen
 
-`files.upload()`, `files.download()`, `drive.mount()` e `IPython.display` están repartidos en seis celdas. Pasan a `evaluador/io_.py`, con detección por `importlib.util.find_spec("google.colab")` y no por variable de entorno ni por try/except disperso.
+`files.upload()`, `files.download()`, `drive.mount()` e `IPython.display` están repartidos en seis celdas. **No se trasladan.** En un proceso local no significan nada: los archivos ya están en disco, las salidas se escriben donde se configuró, y el HTML se abre en el navegador.
 
-En local, un archivo ausente produce `FileNotFoundError` con la ruta esperada. Hoy produce `ImportError: google.colab`, que manda a diagnosticar el problema equivocado.
+La alternativa considerada y descartada era un módulo adaptador que detectara el entorno y despachara a una u otra implementación. Tenía sentido mientras Colab siguiera siendo un destino; sin esa dualidad es abstracción sin segundo caso, y añade una capa de indirección que sólo sirve para ocultar dónde se lee un archivo.
+
+Lo que sí sobrevive es el comportamiento que hacía valiosa la abstracción: un archivo de entrada ausente produce un error que nombra la ruta esperada y la etapa que la genera. Hoy produce `ImportError: google.colab`, que manda a diagnosticar el problema equivocado. Eso pasa a ser una utilidad de lectura en `corpus.py` y `rubrica.py`, no un módulo propio.
 
 ### 9. Configuración por perfiles en archivo, no por edición de celda
 
@@ -150,9 +157,11 @@ El síntoma que lo motiva ya ocurrió: el CONFIG declara `CHECKPOINT_PATH = "che
 
 La clave de API nunca vive en el archivo de perfiles: se lee de `GOOGLE_API_KEY` o de un archivo ignorado por git.
 
-### 10. `nest_asyncio` desaparece en local
+### 10. `nest_asyncio` se elimina de las dependencias
 
-Fuera de Colab no hay bucle corriendo: `asyncio.run()` basta. Con ello se disuelve —no se parchea— la incompatibilidad que la celda 9.6 documenta: *«el cliente `.aio` de google-genai levanta 'Timeout should be used inside a task' bajo nest_asyncio… la misma incompatibilidad afecta a ADK cuando se corre fuera de Colab»*. El adaptador aplica `nest_asyncio` **sólo** cuando detecta Colab.
+Fuera de un cuaderno no hay bucle corriendo: `asyncio.run()` basta. Con ello se disuelve —no se parchea— la incompatibilidad que la celda 9.6 documenta: *«el cliente `.aio` de google-genai levanta 'Timeout should be used inside a task' bajo nest_asyncio… la misma incompatibilidad afecta a ADK cuando se corre fuera de Colab»*.
+
+Al no quedar ningún entorno con bucle preexistente, el paquete no declara `nest_asyncio` ni condicionalmente. Es la dependencia que se va entera.
 
 El rodeo `asyncio.to_thread(_llamar_sync, ...)` de la traducción se conserva sin tocar: funciona al 99.8% sobre 2,562 llamadas y no hay razón para arriesgarlo en este cambio.
 
@@ -168,11 +177,15 @@ El rodeo `asyncio.to_thread(_llamar_sync, ...)` de la traducción se conserva si
 
 **El traslado puede introducir bugs nuevos indistinguibles de los viejos** → Se corre un piloto de 60 filas con el mismo `SEED` antes y después, y se comparan los resultados par a par. El «antes» ya existe: `checkpoint_piloto.jsonl`, 180 registros, 1 solo fallo.
 
-**Python 3.14 con ADK 1.26 es terreno reciente** → Los imports ya se verificaron en este equipo, pero 3.14 está por delante del soporte declarado de ADK. Mitigación: entorno virtual con versiones fijadas, y caída a 3.12 o 3.13 si aparece incompatibilidad. Fijar versión también cierra la brecha con el `>=1.25.0` que declara el cuaderno.
+**Python 3.14 con ADK 1.26 es terreno reciente** → **Resuelto: se usa Python 3.12.10 en entorno virtual.** El global del equipo es 3.14, donde todo importaba, pero 3.14 está por delante del soporte declarado de ADK y no hay razón para correr una carga de pago sobre esa apuesta. 3.12 conserva `tomllib` en la biblioteca estándar, así que los perfiles no añaden dependencia.
 
-**El cuaderno delgado puede volver a engordar** → Nada impide pegar lógica nueva en una celda, y el incentivo de hacerlo es alto durante una sesión de depuración. Mitigación cultural más que técnica: las celdas quedan cortas y con prosa, de modo que una celda larga se vea fuera de lugar.
+**pandas 3.0 rompe la lectura del corpus** → El global del equipo traía pandas 3.0.1, que cambia el tipo por defecto de las columnas de texto y el manejo de ausentes. Todo el pipeline depende de leer con `dtype=str` y `keep_default_na=False` para que los identificadores de tuit de 19 dígitos no pasen por `float64` y pierdan precisión — el mismo daño que la celda 8.5 existe para reparar. Mitigación: `pandas>=2.2,<3.0` fijado en `requirements.txt`; el entorno virtual quedó en 2.3.3. Migrar a 3.x exigirá revalidar la lectura, no es transparente.
 
-**Distribuir el paquete a Colab obliga a resolver la clave primero** → `pip install git+...` requiere repositorio, y hoy `apikey.txt` está en el árbol en texto plano sin `.gitignore` ni `.git`. La extracción de la credencial es prerrequisito del primer commit, no una tarea de limpieza posterior. Alternativa de menor fricción si se quiere diferir el repositorio: subir un `.zip` del paquete a Colab a mano, a costa de que la versión en Colab pueda divergir sin que se note.
+Verificado sobre las versiones fijadas: `retry_options` sigue siendo campo real de `Gemini` en ADK 1.26, y `api_key` / `vertexai` siguen sin serlo, tal como advierte la celda 7 del cuaderno.
+
+**El cuaderno congelado envejece y empieza a mentir** → Al dejar de ejecutarse, nada obliga a que su contenido siga correspondiendo al código. Un lector futuro puede tomar una celda como descripción del comportamiento vigente cuando ya no lo es. Mitigación: una nota al inicio del cuaderno que declare explícitamente su condición de registro histórico, con la fecha y el commit en que dejó de ser ejecutable, y que remita al paquete como fuente de verdad del comportamiento.
+
+**Perder la ejecución en Colab elimina el único entorno de respaldo** → Si el equipo local falla, ya no hay dónde correr el pipeline sin trabajo de reconstrucción. Es una consecuencia aceptada de la decisión: el corpus y los checkpoints ya viven en local, y las corridas largas eran precisamente lo que Colab no sostenía.
 
 **Abortar por cortacircuitos puede matar una corrida larga por una racha desafortunada** → `K` se configura y se registra en el log el motivo exacto del aborto. El checkpoint es append-only con `flush` inmediato, así que lo ya calculado sobrevive y la reanudación continúa desde ahí.
 
@@ -186,20 +199,20 @@ El rodeo `asyncio.to_thread(_llamar_sync, ...)` de la traducción se conserva si
 
 1. **Sacar la credencial y poner el proyecto bajo git.** `.gitignore` antes del primer commit; `apikey.txt` fuera del árbol.
 2. **Entorno virtual con versiones fijadas.** Verificar que el pipeline importa y que la prueba de humo pasa.
-3. **Trasladar por etapas, de la más barata a la más cara**: `config` → `io_` → `rubrica` → `corpus` → `traduccion` → `scoring` → `export` → `viz`. Tras cada una, el cuaderno debe seguir corriendo importando lo ya trasladado. Nunca hay un momento en que nada funcione.
+3. **Trasladar por etapas, de la más barata a la más cara**: `config` → `rubrica` → `corpus` → `traduccion` → `scoring` → `export` → `viz`. Cada etapa se verifica contra su artefacto en disco ya existente en cuanto se traslada, de modo que nunca hay un momento en que nada funcione.
 4. **Piloto «antes»**: 60 filas con `SEED=42` sobre el paquete recién trasladado y el motor **sin** arreglar. Se contrasta contra `checkpoint_piloto.jsonl` para confirmar que el traslado fue fiel.
 5. **Aplicar los cuatro arreglos del motor** (decisiones 3 a 7).
 6. **Piloto «después»**: mismas 60 filas, checkpoint limpio. Comparación par a par.
 7. **Auditar e incorporar `checkpoint (7).jsonl`**, confirmar el reparto 7,708 / 2,540 y la discrepancia de criterios.
 8. **Recalificación selectiva** de los 2,540 pares, una vez reconciliada la rúbrica.
-9. **Adelgazar el cuaderno** y verificar que corre de principio a fin en una sesión limpia de Colab.
+9. **Marcar el cuaderno como registro documental**: nota inicial que declara su condición de memoria histórica, con fecha y commit en que dejó de ser ejecutable, y remisión al paquete como fuente de verdad. El contenido de las celdas no se toca.
 
-Reversa: el cuaderno original se conserva íntegro hasta completar el paso 9. Mientras tanto sigue siendo ejecutable tal cual, y todos los artefactos de datos mantienen su formato, así que revertir es dejar de usar el paquete.
+Reversa: el cuaderno original queda íntegro en el primer commit, y todos los artefactos de datos mantienen su formato. Revertir es dejar de usar el paquete y volver a ejecutar el cuaderno, que sigue siendo capaz de correr aunque se haya decidido no hacerlo.
 
 ## Open Questions
 
-- **¿Repositorio propio o `.zip` a Colab?** Determina si el paso 1 bloquea al paso 9. Un repositorio privado es lo que escala; el `.zip` deja de ser viable en cuanto el paquete cambie a menudo.
+- ~~¿Repositorio propio o `.zip` a Colab?~~ **Resuelto: ninguno.** El usuario descartó Colab como destino. Todo corre en local y el paquete no se distribuye a ninguna parte. El repositorio se conserva por control de versiones, no por distribución.
 - ~~¿Se reconcilia la rúbrica a 4 criterios o a 3?~~ **Resuelto.** El PDF ya está actualizado y es la fuente de verdad: cuatro criterios, tres ordinales 0–5 más el binario 0/1 de saliencia de violencia. El `rubrica.json` en disco (tres criterios, escrito antes que el PDF) está obsoleto y se regenera reparseando el PDF. El criterio 4 del checkpoint corresponde al del PDF, así que los 7,708 pares se recuperan completos. Queda una verificación, no una decisión: que los `slug` y las etiquetas del reparseo coincidan con los del checkpoint, ya que el emparejamiento es por `(tweet_id, slug)`.
 - **¿Cómo se declara que un criterio es binario y sin valencia?** `rubrica.json` hoy distingue escala numérica de nominal, pero no *tipo* de escala. El binario de presencia no es ni logro ni valencia. Afecta a `ESCALA_NIVELES` y `NIVELES_AUSENCIA`, hoy globales. Probablemente pertenezca al cambio de modelado, pero el esquema de `rubrica.json` que este cambio traslada debería dejar el hueco previsto.
 - **¿Cuánto vale `K` en el cortacircuitos?** Demasiado bajo mata corridas sanas; demasiado alto deja pasar otra corrida 21. Un valor inicial conservador y ajustable parece suficiente, pero no hay dato para fijarlo.
-- **¿El cuaderno delgado debe poder correr sin el paquete?** Es decir, ¿se acepta que abrir el `.ipynb` en un Colab nuevo requiera un paso de instalación previo? Si no, hay que mantener una celda de arranque que clone o instale, y esa celda vuelve a ser un punto de fallo de orden.
+- ~~¿El cuaderno delgado debe poder correr sin el paquete?~~ **Resuelto: el cuaderno no se adelgaza.** Deja de ser ejecutable y se conserva íntegro como memoria del proyecto. No hay celda de arranque, y por tanto no hay punto de fallo de orden.

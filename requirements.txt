@@ -1,0 +1,31 @@
+# Dependencias del proceso local de EvaluadorTweets.
+#
+# Versiones fijadas a propósito: este pipeline emite decenas de miles de
+# llamadas de pago y produce artefactos que se comparan entre corridas.
+# Una actualización silenciosa de una dependencia cambiaría resultados sin
+# que nada lo declare.
+#
+# Instalación:   .venv/Scripts/python.exe -m pip install -r requirements.txt
+
+# ── Modelo y agentes ──────────────────────────────────────────────────────
+# 1.25.0 es la versión que el cuaderno cita como validada; 1.26.0 es la que
+# está instalada y verificada en este equipo. Se fija 1.26.0 y se documenta
+# la diferencia en lugar de dejar el rango abierto que traía el cuaderno.
+google-adk==1.26.0
+google-genai==1.66.0
+
+# ── Datos ─────────────────────────────────────────────────────────────────
+# pandas se fija por debajo de 3.0 deliberadamente. La versión 3.0 cambia el
+# tipo por defecto de las columnas de texto y el manejo de valores ausentes,
+# y todo el pipeline depende de leer con dtype=str y keep_default_na=False
+# para que los identificadores de tuit de 19 dígitos no pasen por float64 y
+# pierdan precisión. Migrar a 3.x exige revalidar esa lectura, no es
+# una actualización transparente.
+pandas>=2.2,<3.0
+openpyxl==3.1.5
+
+# ── Ausencias deliberadas ─────────────────────────────────────────────────
+# nest_asyncio: NO se incluye. Sólo hacía falta porque Colab ya tenía un
+#   bucle de eventos corriendo. En un proceso local asyncio.run() basta, y
+#   sin el bucle reentrante desaparece la incompatibilidad con el cliente
+#   asíncrono de google-genai que documenta la celda 9.6 del cuaderno.

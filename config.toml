@@ -1,0 +1,199 @@
+# Configuración de EvaluadorTweets.
+#
+# Reemplaza la celda CONFIG del cuaderno. Existe porque editar una celda a
+# mano no deja rastro: el CONFIG declaraba CHECKPOINT_PATH = "checkpoint.jsonl"
+# mientras en disco había "checkpoint_piloto.jsonl", y esa divergencia no
+# aparecía en ninguna parte. Un perfil es reproducible y se puede comparar
+# entre versiones; una celda editada no.
+#
+# Uso:  python -m evaluador <etapa> --perfil piloto
+#
+# La clave de API NO vive aquí. Se lee de la variable de entorno
+# GOOGLE_API_KEY o del archivo .env, ambos fuera del control de versiones.
+
+perfil_por_defecto = "piloto"
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  Parámetros comunes a todos los perfiles
+# ══════════════════════════════════════════════════════════════════════════
+[comun]
+
+# ── Modelo ────────────────────────────────────────────────────────────────
+# Familia 2.5: el razonamiento se puede apagar. Dejarlo en automático (-1)
+# multiplica el costo por ~2.7.
+modelo = "gemini-2.5-flash"
+temperatura = 0.0
+presupuesto_razonamiento = 0          # 0 = apagado, -1 = automático
+modelo_calibracion = "gemini-2.5-flash-lite"
+
+# ── Credencial ────────────────────────────────────────────────────────────
+nombre_variable_clave = "GOOGLE_API_KEY"
+
+# ── Corpus ────────────────────────────────────────────────────────────────
+# El .xlsx llega dañado en cuatro frentes: mojibake (UTF-8 leído como cp1252),
+# identificadores de 19 dígitos redondeados por float64, 99 textos truncados a
+# 255 caracteres y 458 con los saltos de línea colapsados. La etapa de
+# reparación lo reconstruye desde 'raw_json', que sobrevivió íntegro.
+# El .csv equivalente NO sirve: sufrió una segunda ronda que sustituyó por '?'
+# los caracteres no representables, dentro de su propio raw_json. Es pérdida
+# irreversible, y como las columnas planas de ambos son la misma exportación
+# fila por fila, el CSV bueno se REGENERA desde el .xlsx.
+corpus_fuente_xlsx = "20260910 turistas_seleccionados.xlsx"
+corpus_reparado    = "turistas_reparado.csv"
+corpus_traducido   = "turistas_traducido.csv"
+forzar_reparacion  = false
+
+col_id          = "id"
+col_texto       = "text_completo"
+col_traduccion  = "traducción"
+col_lang        = "lang"
+
+# ── Selección ─────────────────────────────────────────────────────────────
+semilla          = 42                 # muestreo reproducible
+excluir_retweets = false
+excluir_quotes   = false
+filtro_lang      = []                 # [] = todos; p.ej. ["es", "en"]
+filtro_tipo_query = []                # [] = todos; p.ej. ["VICTIMIZACION"]
+
+# ── Rúbrica ───────────────────────────────────────────────────────────────
+# El PDF es la fuente de verdad. rubrica.json se regenera de él y es el
+# artefacto inspeccionable antes de gastar.
+rubrica_pdf  = "rubrica_tweets.pdf"
+rubrica_json = "rubrica.json"
+
+# ── Traducción ────────────────────────────────────────────────────────────
+# La traducción es para CONSUMO HUMANO: el objeto evaluado sigue siendo el
+# texto original (regla 5 de la instrucción por criterio). Se paga una sola
+# vez sobre el corpus completo y se persiste; ninguna corrida posterior la
+# vuelve a pagar. Hoy está hecha: 2,557 de 2,562 al 99.8%.
+modelo_traduccion       = "gemini-2.5-flash-lite"
+checkpoint_traduccion   = "checkpoint_traduccion.jsonl"
+concurrencia_traduccion = 8
+retraducir_existentes   = false
+
+# ── Calificación ──────────────────────────────────────────────────────────
+justificacion_max_palabras = 90       # la salida domina el costo
+
+# ── Corrida ───────────────────────────────────────────────────────────────
+# NOTA: 'concurrencia' cuenta FILAS, no llamadas. Cada fila abanica un agente
+# por criterio, así que las peticiones en vuelo son concurrencia × n_criterios.
+# Con 4 criterios, 8 filas son 32 peticiones simultáneas. Este parámetro se
+# invierte en el grupo 8 del cambio migrar-a-proceso-local; aquí se conserva
+# con su semántica original para que el piloto de fidelidad sea comparable.
+concurrencia  = 8
+reciclar_cada = 200                   # filas por runner, para no acumular sesiones
+max_intentos  = 5
+
+# ── Salida ────────────────────────────────────────────────────────────────
+salida_ancho = "tweets_calificados.csv"
+salida_tidy  = "tweets_calificados_tidy.csv"
+salida_html  = "graficas_calificaciones.html"
+
+# ── Visualización ─────────────────────────────────────────────────────────
+# 'created_at' viene en UTC y los cortes son eventos locales. Un tuit de las
+# 19:00 del 10 de junio en CDMX se registra como 01:00 del 11 en UTC: sin
+# convertir, cruzaría de período un día antes de tiempo. Con ~42 tuits diarios
+# las seis horas mueven del orden de diez tuits en cada frontera.
+zona_horaria = "America/Mexico_City"
+
+# Cómo se colorean los niveles:
+#   "divergente" → escala de VALENCIA (muy negativo … muy positivo). Rojo, gris
+#                  neutro al centro, azul. Es la de los criterios 1 a 3.
+#   "secuencial" → escala de LOGRO (bajo … alto). Un solo matiz, claro → oscuro.
+# ADVERTENCIA: este parámetro es global y el cuarto criterio de la rúbrica
+# vigente es binario 0/1 sin valencia, así que ninguna de las dos escalas lo
+# describe. Hacerlo por criterio pertenece al cambio de modelado pendiente.
+escala_niveles = "divergente"
+
+# Niveles que significan "el tuit no trae nada de esta dimensión", NO un grado
+# bajo de logro.
+#   "auto" → etiqueta «0» o puntos == 0
+#   sin declarar → ningún nivel es de ausencia; se grafican todos
+# ADVERTENCIA: correcto para los criterios ordinales 1 a 3, donde el 0 es
+# ausencia. Exactamente inverso para el criterio binario de saliencia de
+# violencia, donde el 0 es un hallazgo sustantivo. Latente hoy porque ningún
+# nivel «0» se ha asignado nunca: la regla 1 de la instrucción lo intercepta
+# antes y devuelve aplicable=false.
+niveles_ausencia = "auto"
+
+umbral_muestra_pequena  = 100         # menos tuits que esto en la selección → advertir
+umbral_cobertura_diaria = 10          # menos calificados por día → series no interpretables
+ventana_suavizado       = 7           # días de la media móvil (arranca apagada)
+
+# ── Umbrales de las verificaciones de calidad ─────────────────────────────
+umbral_concentracion = 0.90           # un nivel con más de esto → criterio sin poder discriminante
+umbral_no_aplicable  = 0.50           # más de esto no aplicable → la rúbrica puede no corresponder
+umbral_estabilidad   = 0.95           # acuerdo test-retest mínimo esperado con temperatura 0
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  Períodos
+# ══════════════════════════════════════════════════════════════════════════
+# Intervalos [desde, hasta): límite inferior INCLUSIVO y superior EXCLUSIVO,
+# para que un tuit del 11 de junio caiga en uno solo. El último queda abierto
+# (sin 'hasta').
+#
+# El corte del 6 de julio no es arbitrario: el último partido jugado en
+# territorio mexicano fueron los octavos del 5 de julio en el Estadio Azteca.
+# Guadalajara cerró el 26 de junio y Monterrey también terminó en octavos.
+# El torneo siguió hasta el 19 de julio FUERA de México — de ahí el nombre
+# del tercer período.
+#
+# 'desde' del primero es 2026-05-31, no 2026-06-01: el corpus se recolectó por
+# fecha UTC y al pasar el día a hora de México 13 tuits retroceden al 31 de
+# mayo. Empezar el 1 de junio los dejaría fuera de todo período sin motivo.
+
+[[periodos]]
+nombre = "PREVIO A MUNDIAL"
+desde  = "2026-05-31"
+hasta  = "2026-06-11"
+
+[[periodos]]
+nombre = "DURANTE MUNDIAL EN MEXICO"
+desde  = "2026-06-11"
+hasta  = "2026-07-06"
+
+[[periodos]]
+nombre = "DESPUES DE PARTIDOS EN MEXICO"
+desde  = "2026-07-06"
+# sin 'hasta': período abierto, sólo el último puede serlo
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  Precios USD por millón de tokens (entrada, salida)
+# ══════════════════════════════════════════════════════════════════════════
+[precios]
+"gemini-2.5-flash"      = [0.30, 2.50]
+"gemini-2.5-flash-lite" = [0.10, 0.40]
+"gemini-2.5-pro"        = [1.25, 10.00]
+"gemini-3.7-flash"      = [0.75, 3.75]
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  Perfiles
+# ══════════════════════════════════════════════════════════════════════════
+# Cada perfil sobreescribe lo que necesite de [comun]. Lo que no declara, lo
+# hereda. Las rutas de checkpoint son distintas a propósito: un piloto no debe
+# poder contaminar la corrida completa ni al revés.
+
+[perfiles.piloto]
+descripcion = "Pasada barata de prueba. 60 tuits, el mismo tamaño del piloto original."
+n_muestra   = 60
+checkpoint  = "checkpoint_piloto_local.jsonl"
+salida_ancho = "tweets_calificados_piloto.csv"
+salida_tidy  = "tweets_calificados_piloto_tidy.csv"
+salida_html  = "graficas_calificaciones_piloto.html"
+
+[perfiles.completo]
+descripcion = "Corpus completo: 2,562 tuits × 4 criterios = 10,248 llamadas."
+n_muestra   = 0                       # 0 = corpus completo
+checkpoint  = "checkpoint.jsonl"
+
+[perfiles.recuperacion]
+descripcion = "Reanuda sobre el checkpoint de la corrida dañada: recupera 7,708 pares y recalifica 2,540."
+n_muestra   = 0
+checkpoint  = "checkpoint_recuperado.jsonl"
+salida_ancho = "tweets_calificados_recuperado.csv"
+salida_tidy  = "tweets_calificados_recuperado_tidy.csv"
+salida_html  = "graficas_calificaciones_recuperado.html"
