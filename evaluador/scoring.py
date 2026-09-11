@@ -32,7 +32,7 @@ from pydantic import BaseModel, Field
 
 from .adk import (LlmAgent, ParallelAgent, config_generacion, construir_modelo,
                   ejecutar_agente)
-from .config import (Config, ESTADOS_RESULTADO, estados_a_conservar)
+from .config import (ALCANCES, Config, ESTADOS_RESULTADO, estados_a_conservar)
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -661,3 +661,180 @@ def cargar_resultados(ruta: Path) -> pd.DataFrame:
     df = df.sort_values("_valido", kind="stable")
     df = df.drop_duplicates(subset=["tweet_id", "slug"], keep="last")
     return df.drop(columns="_valido")
+
+# ──────────────────────────────────────────────────────────────────────────
+#  Auditoría de un checkpoint
+# ──────────────────────────────────────────────────────────────────────────
+
+def auditar(ruta: Path, criterios: list[dict] | None = None,
+            escribir=print) -> dict:
+    """Analiza un checkpoint sin modificarlo y sin emitir llamadas.
+
+    Existe porque el estado de un checkpoint no es evidente: el de la corrida
+    dañada tenía 27,748 registros para 10,248 pares, con repeticiones de hasta
+    14 veces del mismo par, y 15,384 de esos registros eran el mismo error de
+    programación. Nada en el archivo lo decía.
+    """
+    if not ruta.exists():
+        raise FileNotFoundError(f"No existe el checkpoint '{ruta}'.")
+
+    registros = 0
+    ilegibles = 0
+    apariciones: dict[tuple[str, str], int] = {}
+    ultimo: dict[tuple[str, str], dict] = {}
+    ultimo_bueno: dict[tuple[str, str], dict] = {}
+    slugs: set[str] = set()
+
+    with ruta.open(encoding="utf-8") as fh:
+        for linea in fh:
+            linea = linea.strip()
+            if not linea:
+                continue
+            try:
+                r = json.loads(linea)
+                k = (str(r["tweet_id"]), r["slug"])
+            except Exception:
+                ilegibles += 1
+                continue
+            registros += 1
+            slugs.add(r["slug"])
+            apariciones[k] = apariciones.get(k, 0) + 1
+            ultimo[k] = r
+            if r.get("estado") in ESTADOS_RESULTADO:
+                ultimo_bueno[k] = r
+
+    final = {k: ultimo_bueno.get(k, ultimo[k]) for k in ultimo}
+    por_estado: dict[str, int] = {}
+    for r in final.values():
+        e = r.get("estado", "?")
+        por_estado[e] = por_estado.get(e, 0) + 1
+
+    repetidos = sum(1 for n in apariciones.values() if n > 1)
+    max_rep = max(apariciones.values(), default=0)
+    tuits = len({t for t, _ in ultimo})
+    resueltos = sum(n for e, n in por_estado.items() if e in ESTADOS_RESULTADO)
+    fallidos = len(final) - resueltos
+
+    escribir(f"{'=' * 72}")
+    escribir(f"AUDITORÍA · {ruta.name}")
+    escribir(f"{'=' * 72}")
+    escribir(f"  registros escritos        {registros:>8,}")
+    if ilegibles:
+        escribir(f"  líneas ilegibles          {ilegibles:>8,}  (omitidas)")
+    escribir(f"  pares tuit×criterio        {len(final):>8,}")
+    escribir(f"  tuits distintos            {tuits:>8,}")
+    escribir(f"  criterios distintos        {len(slugs):>8,}")
+    if repetidos:
+        escribir(f"  pares con repeticiones     {repetidos:>8,}  "
+                 f"(hasta {max_rep} veces el mismo)")
+
+    escribir(f"\n  estado final de cada par:")
+    for e, n in sorted(por_estado.items(), key=lambda x: -x[1]):
+        marca = "✅" if e in ESTADOS_RESULTADO else "❌"
+        escribir(f"    {marca} {e:<18} {n:>8,}  {n / max(len(final), 1):6.1%}")
+
+    escribir(f"\n  resueltos {resueltos:,} · pendientes de recalificar {fallidos:,}")
+
+    # Diagnósticos predominantes de los fallos
+    motivos: dict[str, int] = {}
+    for r in final.values():
+        if r.get("estado") not in ESTADOS_RESULTADO:
+            d = str(r.get("detalle") or "")[:110]
+            motivos[d] = motivos.get(d, 0) + 1
+    if motivos:
+        escribir(f"\n  diagnósticos de fallo más frecuentes:")
+        for d, n in sorted(motivos.items(), key=lambda x: -x[1])[:5]:
+            escribir(f"    [{n:>6,}] {d or '(sin detalle)'}")
+
+    # Correspondencia con la rúbrica vigente
+    discrepancia = None
+    if criterios is not None:
+        de_rubrica = {c["slug"] for c in criterios}
+        solo_ckpt = sorted(slugs - de_rubrica)
+        solo_rub = sorted(de_rubrica - slugs)
+        escribir(f"\n  correspondencia con la rúbrica vigente:")
+        if not solo_ckpt and not solo_rub:
+            escribir(f"    ✅ los {len(slugs)} criterios coinciden")
+        else:
+            if solo_ckpt:
+                escribir(f"    ❌ en el checkpoint pero NO en la rúbrica: {solo_ckpt}")
+            if solo_rub:
+                escribir(f"    ➕ en la rúbrica pero no en el checkpoint: {solo_rub}")
+                escribir(f"       implica calificar {len(solo_rub) * tuits:,} pares nuevos")
+        discrepancia = {"solo_checkpoint": solo_ckpt, "solo_rubrica": solo_rub}
+
+    escribir(f"{'=' * 72}")
+    return {
+        "registros": registros, "ilegibles": ilegibles, "pares": len(final),
+        "tuits": tuits, "criterios": sorted(slugs), "por_estado": por_estado,
+        "repetidos": repetidos, "max_repeticiones": max_rep,
+        "resueltos": resueltos, "fallidos": fallidos, "discrepancia": discrepancia,
+    }
+
+
+def verificar_correspondencia(ruta: Path, criterios: list[dict],
+                              forzar: bool = False) -> None:
+    """Rehúsa reanudar si el checkpoint fue escrito con otra rúbrica.
+
+    Mezclar dos rúbricas en un mismo checkpoint produce un CSV cuyas columnas
+    no significan lo mismo en todas las filas, y eso no se detecta después.
+    """
+    if not ruta.exists():
+        return
+    slugs = set()
+    with ruta.open(encoding="utf-8") as fh:
+        for linea in fh:
+            linea = linea.strip()
+            if not linea:
+                continue
+            try:
+                slugs.add(json.loads(linea)["slug"])
+            except Exception:
+                continue
+    if not slugs:
+        return
+
+    de_rubrica = {c["slug"] for c in criterios}
+    ajenos = sorted(slugs - de_rubrica)
+    if ajenos and not forzar:
+        raise RuntimeError(
+            f"El checkpoint '{ruta.name}' contiene criterios que la rúbrica vigente "
+            f"no declara: {ajenos}\n"
+            f"  criterios de la rúbrica : {sorted(de_rubrica)}\n"
+            f"  criterios del checkpoint: {sorted(slugs)}\n"
+            f"Mezclar dos rúbricas produce columnas que no significan lo mismo en "
+            f"todas las filas. Usa un checkpoint distinto, o pasa forzar=True si "
+            f"sabes lo que haces."
+        )
+
+
+def estimar_recalificacion(ruta: Path, sub: pd.DataFrame, criterios: list[dict],
+                           cfg: Config, alcance: str | None = None,
+                           escribir=print) -> dict:
+    """Cuántos pares se recuperan, cuántos se recalifican y cuánto cuesta.
+
+    Se reporta ANTES de emitir la primera llamada. Los alcances más amplios
+    que «fallidos» repiten gasto ya realizado y lo advierten.
+    """
+    alcance = alcance or cfg.alcance_recalificacion
+    hechas = claves_completadas(ruta, alcance)
+    total = len(sub) * len(criterios)
+    recuperados = 0
+    for _, fila in sub.iterrows():
+        tid = str(fila[cfg.col_id])
+        recuperados += sum(1 for c in criterios if (tid, c["slug"]) in hechas)
+    recalificar = total - recuperados
+
+    escribir(f"{'=' * 72}")
+    escribir(f"ALCANCE DE RECALIFICACIÓN · «{alcance}»")
+    escribir(f"  {ALCANCES[alcance]}")
+    escribir(f"{'=' * 72}")
+    escribir(f"  pares en la selección      {total:>8,}")
+    escribir(f"  se recuperan del checkpoint{recuperados:>8,}  (no se vuelven a pagar)")
+    escribir(f"  se recalifican             {recalificar:>8,}")
+
+    if alcance != "fallidos" and recuperados < total:
+        escribir(f"\n  ⚠️  este alcance repite gasto ya realizado. Con «fallidos» "
+                 f"sólo se\n      recalificaría lo que falló.")
+    escribir(f"{'=' * 72}")
+    return {"total": total, "recuperados": recuperados, "recalificar": recalificar}

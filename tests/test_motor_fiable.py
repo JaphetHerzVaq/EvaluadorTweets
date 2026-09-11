@@ -273,3 +273,61 @@ def test_los_resultados_previos_al_aborto_sobreviven(tmp_path: Path, monkeypatch
                              escribir=lambda *a: None))
 
     assert ("t0", "c1") in S.claves_completadas(ckpt, "fallidos")
+
+
+# ──────────────────────────────────────────────────────────────────────────
+#  Auditoría de checkpoint
+# ──────────────────────────────────────────────────────────────────────────
+
+def test_la_auditoria_no_modifica_el_checkpoint(tmp_path: Path) -> None:
+    ckpt = _checkpoint(tmp_path, [("t1", "c1", "OK"), ("t2", "c1", "ERROR")])
+    antes = ckpt.read_bytes()
+    S.auditar(ckpt, escribir=lambda *a: None)
+    assert ckpt.read_bytes() == antes
+
+
+def test_la_auditoria_resuelve_repeticiones_por_ultimo_valido(tmp_path: Path) -> None:
+    ckpt = _checkpoint(tmp_path, [
+        ("t1", "c1", "ERROR"), ("t1", "c1", "ERROR"), ("t1", "c1", "OK"),
+        ("t2", "c1", "ERROR"),
+    ])
+    r = S.auditar(ckpt, escribir=lambda *a: None)
+    assert r["registros"] == 4
+    assert r["pares"] == 2
+    assert r["repetidos"] == 1
+    assert r["max_repeticiones"] == 3
+    assert r["resueltos"] == 1 and r["fallidos"] == 1
+
+
+def test_la_auditoria_cuenta_las_lineas_ilegibles(tmp_path: Path) -> None:
+    p = tmp_path / "c.jsonl"
+    p.write_text(_registro("t1", "c1", "OK") + "\n{ rota\n", encoding="utf-8")
+    r = S.auditar(p, escribir=lambda *a: None)
+    assert r["ilegibles"] == 1 and r["registros"] == 1
+
+
+def test_reanudar_rehusa_si_la_rubrica_no_corresponde(tmp_path: Path) -> None:
+    ckpt = _checkpoint(tmp_path, [("t1", "criterio_viejo", "OK")])
+    with pytest.raises(RuntimeError, match="criterio_viejo"):
+        S.verificar_correspondencia(ckpt, CRITERIOS)
+    S.verificar_correspondencia(ckpt, CRITERIOS, forzar=True)   # no lanza
+
+
+def test_criterios_coincidentes_no_bloquean(tmp_path: Path) -> None:
+    ckpt = _checkpoint(tmp_path, [("t1", "c1", "OK"), ("t1", "c2", "OK")])
+    S.verificar_correspondencia(ckpt, CRITERIOS)
+
+
+def test_estimar_recalificacion_por_alcance(tmp_path: Path) -> None:
+    ckpt = _checkpoint(tmp_path, [
+        ("t0", "c1", "OK"), ("t0", "c2", "NO_APLICABLE"),
+        ("t1", "c1", "ERROR"), ("t1", "c2", "OK"),
+    ])
+    cfg = cargar_config("piloto")
+    sub = _sub(2)
+    esperado = {"fallidos": 1, "sin-nivel": 2, "todo": 4}
+    for alcance, n in esperado.items():
+        r = S.estimar_recalificacion(ckpt, sub, CRITERIOS, cfg, alcance,
+                                     escribir=lambda *a: None)
+        assert r["total"] == 4
+        assert r["recalificar"] == n, f"alcance {alcance}"

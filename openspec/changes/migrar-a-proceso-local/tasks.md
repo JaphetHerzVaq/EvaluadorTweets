@@ -86,18 +86,18 @@ grupo deben corregir ambas cosas.
 
 ## 9. Recuperación de checkpoint
 
-- [ ] 9.1 Implementar la auditoría que reporta registros, pares distintos, desglose por estado, pares repetidos, estado final por par y diagnósticos predominantes, sin emitir llamadas
-- [ ] 9.2 Implementar el conteo y la omisión de líneas ilegibles en la auditoría
+- [x] 9.1 Implementar la auditoría que reporta registros, pares distintos, desglose por estado, pares repetidos, estado final por par y diagnósticos predominantes, sin emitir llamadas
+- [x] 9.2 Implementar el conteo y la omisión de líneas ilegibles en la auditoría
 - [x] 9.3 Cambiar la reanudación para considerar completado únicamente el par cuyo registro vigente tenga estado de resultado, tratando la no aplicabilidad como resultado
 - [x] 9.4 Cambiar la deduplicación en lectura a último resultado válido, con caída al último registro escrito cuando no haya ninguno válido
-- [ ] 9.5 Implementar la verificación de correspondencia de criterios entre checkpoint y rúbrica vigente, con rechazo de la reanudación ante discrepancia salvo bandera explícita
-- [ ] 9.6 Reportar antes de reanudar cuántos pares se recuperan, cuántos se recalifican y el costo estimado, exigiendo confirmación de gasto
+- [x] 9.5 Implementar la verificación de correspondencia de criterios entre checkpoint y rúbrica vigente, con rechazo de la reanudación ante discrepancia salvo bandera explícita
+- [x] 9.6 Reportar antes de reanudar cuántos pares se recuperan, cuántos se recalifican y el costo estimado, exigiendo confirmación de gasto
 - [x] 9.10 Implementar los tres alcances de recalificación: `fallidos` (defecto), `sin-nivel` y `todo`, con `todo` ignorando por completo los estados del checkpoint
-- [ ] 9.11 Hacer que los alcances más amplios que `fallidos` reporten su conteo desglosado y adviertan que repiten gasto ya realizado antes de pedir confirmación
+- [x] 9.11 Hacer que los alcances más amplios que `fallidos` reporten su conteo desglosado y adviertan que repiten gasto ya realizado antes de pedir confirmación
 - [x] 9.12 Verificar que recalificar con cualquier alcance no borra registros previos y que la lectura sigue resolviendo cada par por su registro válido más reciente
-- [ ] 9.7 Incorporar `checkpoint (7).jsonl` al proyecto con un nombre estable y auditarlo
-- [ ] 9.8 Confirmar sobre la auditoría el reparto esperado de 7,708 pares recuperables y 2,540 a recalificar
-- [ ] 9.9 Verificar que una reanudación sobre pares ya resueltos no emite ninguna llamada
+- [x] 9.7 Incorporar `checkpoint (7).jsonl` al proyecto con un nombre estable y auditarlo
+- [x] 9.8 Confirmar sobre la auditoría el reparto esperado de 7,708 pares recuperables y 2,540 a recalificar
+- [x] 9.9 Verificar que una reanudación sobre pares ya resueltos no emite ninguna llamada
 
 ## 10. Exportación y visualización
 
