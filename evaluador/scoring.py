@@ -474,40 +474,49 @@ async def _evaluar_fila(cfg: Config, validador: Validador, runner, fila,
                         criterios_por_slug: dict | None = None) -> list[dict]:
     """Califica una fila contra sus criterios pendientes.
 
+    Acumula los resultados entre intentos. Cuando el ParallelAgent devuelve
+    unos criterios y otros no, los que sí devolvió se CONSERVAN y el reintento
+    sólo persigue los que faltan. Sin esto se tiraban respuestas ya pagadas: en
+    el rescate de los 56 fallos se escribieron 31 pares de 56 porque los
+    criterios que ADK sí resolvió en el último intento se descartaban junto con
+    la excepción.
+
     Lanza :class:`FalloEstructural` si el error afecta a todas las filas: quien
     llame debe abortar la corrida en vez de seguir escribiendo fallos.
     """
     tweet_id = str(fila[cfg.col_id])
+
+    def _anotar(reg: dict) -> dict:
+        reg["tweet_id"] = tweet_id
+        reg["contexto_incompleto"] = fila["contexto_incompleto"]
+        return reg
+
     async with sem:
+        resueltos: dict[str, dict] = {}
         ultimo: Exception | None = None
+
         for intento in range(1, cfg.max_intentos + 1):
+            faltan = [s for s in pendientes if s not in resueltos]
+            if not faltan:
+                break
             try:
-                claves = [f"cal_{s}" for s in pendientes]
                 estado = await asyncio.wait_for(
-                    evaluar_payload(runner, fila["_payload"], claves),
+                    evaluar_payload(runner, fila["_payload"],
+                                    [f"cal_{s}" for s in faltan]),
                     timeout=cfg.timeout_llamada,
                 )
+                for slug in faltan:
+                    clave = f"cal_{slug}"
+                    if clave in estado:
+                        resueltos[slug] = _anotar(validador.validar(slug, estado[clave]))
 
-                # Un resultado parcial es un FALLO REINTENTABLE, no un
-                # resultado. El cuaderno materializaba aquí los registros
-                # SIN_RESPUESTA y retornaba; al no lanzar excepción, el bucle
-                # de reintentos nunca se activaba y el hueco se escribía como
-                # definitivo. El piloto lo reprodujo: 1 de 240.
-                faltantes = [s for s in pendientes if f"cal_{s}" not in estado]
-                if faltantes:
-                    raise ResultadoParcial(faltantes)
-
-                salida = []
-                for slug in pendientes:
-                    reg = validador.validar(slug, estado[f"cal_{slug}"])
-                    reg["tweet_id"] = tweet_id
-                    reg["contexto_incompleto"] = fila["contexto_incompleto"]
-                    salida.append(reg)
-                return salida
+                aun = [s for s in pendientes if s not in resueltos]
+                if aun:
+                    # Fallo reintentable, pero lo ya resuelto queda guardado.
+                    raise ResultadoParcial(aun)
+                return [resueltos[s] for s in pendientes]
 
             except Exception as exc:
-                # Un fallo estructural afecta a todas las filas por igual:
-                # reintentarlo es tiempo perdido y registrarlo es dato falso.
                 if es_estructural(exc):
                     raise FalloEstructural(
                         f"fallo estructural al evaluar el tuit {tweet_id}: "
@@ -518,15 +527,20 @@ async def _evaluar_fila(cfg: Config, validador: Validador, runner, fila,
                     break
                 await asyncio.sleep(min(2 ** intento, cfg.retraso_maximo))
 
+        faltan = [s for s in pendientes if s not in resueltos]
+        if not faltan:
+            return [resueltos[s] for s in pendientes]
+
         # Agotados los reintentos de ADK, se intenta una vez por la vía
-        # directa. Recupera los casos donde el fallo era de ADK y no del
+        # directa: recupera los casos donde el fallo era de ADK y no del
         # modelo, y para los que el proveedor sí rechaza obtiene el motivo,
         # que ADK no expone.
-        if criterios_por_slug is not None and isinstance(ultimo, ResultadoParcial):
+        if criterios_por_slug is not None:
             try:
-                return await rescatar_faltantes(
-                    cfg, validador, fila, criterios_por_slug,
-                    ultimo.faltantes, tweet_id)
+                for reg in await rescatar_faltantes(
+                        cfg, validador, fila, criterios_por_slug, faltan, tweet_id):
+                    resueltos[reg["slug"]] = reg
+                return [resueltos[s] for s in pendientes]
             except Exception as exc:
                 if es_estructural(exc):
                     raise FalloEstructural(
@@ -536,11 +550,11 @@ async def _evaluar_fila(cfg: Config, validador: Validador, runner, fila,
                 ultimo = exc
 
         motivo = motivo_fallo(ultimo)
-        return [{"tweet_id": tweet_id, "slug": slug, "aplicable": False, "nivel": None,
-                 "puntaje": None, "justificacion": "", "estado": motivo,
-                 "detalle": str(ultimo)[:300],
-                 "contexto_incompleto": fila["contexto_incompleto"]}
-                for slug in pendientes]
+        for slug in faltan:
+            resueltos[slug] = _anotar({
+                "slug": slug, "aplicable": False, "nivel": None, "puntaje": None,
+                "justificacion": "", "estado": motivo, "detalle": str(ultimo)[:300]})
+        return [resueltos[s] for s in pendientes]
 
 
 async def correr(cfg: Config, sub: pd.DataFrame, criterios: list[dict],

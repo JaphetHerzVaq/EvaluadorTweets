@@ -410,12 +410,69 @@ Esto es un principio general de diseño: *lo que se puede derivar determinístic
 |---|---|:-:|
 | `OK` | Se asignó un nivel válido | No |
 | `NO_APLICABLE` | La IA dijo que el criterio no aplica | No |
+| `BLOQUEADO` | El proveedor rechazó la respuesta para ese texto | No |
 | `FUERA_DE_ESCALA` | La IA inventó un nivel que no existe | Se descarta |
 | `ERROR` | Falló la llamada | ✅ Sí |
-| `SIN_RESPUESTA` | El filtro de contenido bloqueó la respuesta | ✅ Sí |
+| `SIN_RESPUESTA` | ADK no devolvió estado para ese criterio | ✅ Sí |
 | `TIEMPO_AGOTADO` | Pasaron 120 s sin respuesta | ✅ Sí |
 
-Al reanudar, el sistema **conserva** `OK` y `NO_APLICABLE` (ya se pagaron) y **sólo repite** los de abajo. Eso es el alcance `fallidos`, el que viene por defecto.
+Al reanudar, el sistema **conserva** `OK`, `NO_APLICABLE` y `BLOQUEADO` (los dos primeros ya se pagaron; el tercero no va a cambiar) y **sólo repite** los de abajo. Eso es el alcance `fallidos`, el que viene por defecto.
+
+### `SIN_RESPUESTA` no significa lo que parecía
+
+Durante un buen rato se creyó que `SIN_RESPUESTA` era siempre el filtro de contenido. **Era falso, y costó dos reintentos completos descubrirlo.**
+
+El problema es que ADK no dice por qué falta un criterio: cuando el `ParallelAgent` no emite estado para uno de los cuatro, no lanza ninguna excepción — simplemente esa clave no está. Desde fuera, un bloqueo del proveedor y un fallo interno de ADK se ven idénticos.
+
+Se reintentaron los 56 fallos de la corrida uno a uno, esta vez **sin pasar por ADK**, llamando directo a la API con la misma instrucción y el mismo esquema:
+
+| causa | pares | qué pasó |
+|---|---|---|
+| fallo de la ruta de ADK | **33** (59%) | la llamada directa **respondió sin problema** |
+| `PROHIBITED_CONTENT` | **23** (41%) | bloqueo real: contenido que el proveedor no procesa |
+
+Más de la mitad no tenían nada que ver con el contenido. Es reproducible y determinista: con el tuit afectado, la RÚBRICA 3 no devuelve estado en ADK **ni siquiera corriendo sola**, mientras la llamada directa la resuelve al primer intento.
+
+> **Cómo se llegó al diagnóstico equivocado.** Al verificarlo por primera vez se probó con la RÚBRICA 1 — que no era de las que fallaban. Respondió bien, y ese éxito se leyó como confirmación de que el problema era el contenido. La prueba estaba mirando el caso equivocado.
+
+### El segundo defecto, que el primero tapaba
+
+Al medir el rescate contra lo predicho, los números salieron invertidos: se
+esperaban 33 recuperados y salieron 23, con 33 todavía fallando. Esa
+discrepancia destapó un bug distinto, y peor.
+
+Cuando el `ParallelAgent` devolvía unos criterios y otros no, el motor lanzaba
+la excepción de resultado parcial **descartando los que sí había devuelto**.
+El reintento volvía a pedir los cuatro desde cero.
+
+```
+  ADK devuelve c1 y c4, falla c2 y c3
+        └──▶ ResultadoParcial(["c2","c3"])
+                   │
+             c1 y c4 se tiran con la excepción   ← respuestas ya pagadas
+                   │
+             el reintento vuelve a pedir los cuatro
+```
+
+Se pagaron esas respuestas dos y tres veces, y al final quedaban sin registro.
+Ahora el motor **acumula entre intentos**: lo que se resuelve se guarda, el
+reintento persigue sólo lo que falta, y el respaldo directo recibe únicamente
+el remanente. Con eso, los 33 pares que llevaban tres corridas «fallando» se
+resolvieron a la primera y sin un solo error: ADK siempre los había respondido.
+
+**Qué se hizo con eso.** Ahora, cuando ADK agota sus reintentos para un criterio, el sistema lo intenta una vez por la vía directa:
+
+```
+  ADK (los 4 criterios de golpe)
+      └─ agota reintentos ──▶ respaldo directo, criterio por criterio
+                                  ├── responde       ──▶ OK / NO_APLICABLE
+                                  └── block_reason   ──▶ BLOQUEADO, y no se
+                                                          reintenta nunca más
+```
+
+Recupera el 59% y marca el 41% restante como permanente. Eso último importa: un par bloqueado que se reintenta en cada reanudación es dinero garantizado sin resultado, y ensucia el conteo de fallidas de todas las corridas siguientes.
+
+Los 23 bloqueados son tuits que describen abuso sexual de menores. `PROHIBITED_CONTENT` es el **único** umbral de Gemini que `safety_settings` no permite relajar — se verificó poniendo `BLOCK_NONE` en las cuatro categorías configurables y no cambia nada. No hay forma de calificarlos, ni debería haberla.
 
 ---
 
@@ -426,11 +483,22 @@ Corrida `anclada`, 11 de septiembre de 2026. **2,631 tuits × 4 criterios = 10,5
 ### Cuánto se pudo calificar
 
 ```
-NO_APLICABLE  ████████████████████████████████████████████████  10,168  (96.6%)
-OK            █                                                     300  ( 2.9%)
-SIN_RESPUESTA ▏                                                      48  ( 0.5%)
-TIEMPO_AGOTADO▏                                                       8  ( 0.1%)
+NO_APLICABLE  ████████████████████████████████████████████████  10,200  (96.9%)
+OK            █                                                     307  ( 2.9%)
+BLOQUEADO     ▏                                                      17  ( 0.2%)
 ```
+
+**Cero pares sin resolver.** La primera pasada dejó 56 fallos; se resolvieron
+todos salvo los 17 que el proveedor rechaza de forma permanente. De esos 56:
+
+| | pares | qué eran en realidad |
+|---|---|---|
+| recuperados al dejar de descartarlos | **33** | ADK **sí** los había resuelto; el motor tiraba esas respuestas |
+| rescatados por la llamada directa | **6** | ADK no los resolvía, la API sí |
+| bloqueados de verdad | **17** | `PROHIBITED_CONTENT` |
+
+Sólo 17 de 56 eran fallos genuinos. Los otros 39 eran defectos del motor,
+descritos abajo.
 
 ### RÚBRICA 1 — Emoción hacia México (2,617 pares resueltos)
 

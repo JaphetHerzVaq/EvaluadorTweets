@@ -460,3 +460,58 @@ def test_un_fallo_del_respaldo_no_pierde_la_fila(monkeypatch) -> None:
     assert len(regs) == 1
     assert regs[0]["estado"] == "ERROR_SERVIDOR"
     assert regs[0]["tweet_id"] == "t1"
+
+
+def test_no_se_tira_lo_que_adk_si_devolvio(monkeypatch) -> None:
+    """El bug del rescate: con 4 criterios pendientes, ADK devolvía 2 y los 2
+    buenos se descartaban junto con la excepción. Se escribieron 31 pares de 56.
+    """
+    intentos = {"n": 0}
+
+    async def parcial(runner, payload, claves):
+        # Siempre devuelve c1 y nunca c2: sin acumulación, c1 se perdería.
+        intentos["n"] += 1
+        return {"cal_c1": {"aplicable": True, "nivel": "1", "justificacion": "x"}} \
+            if "cal_c1" in claves else {}
+
+    async def rescate(cfg, validador, fila, porslug, faltantes, tid):
+        return [{"tweet_id": tid, "slug": s, "aplicable": False, "nivel": None,
+                 "puntaje": None, "justificacion": "", "estado": "BLOQUEADO",
+                 "detalle": "PROHIBITED_CONTENT", "contexto_incompleto": ""}
+                for s in faltantes]
+
+    monkeypatch.setattr(S, "evaluar_payload", parcial)
+    monkeypatch.setattr(S, "rescatar_faltantes", rescate)
+
+    cfg = cargar_config("piloto")
+    sem = asyncio.Semaphore(1)
+    regs = asyncio.run(S._evaluar_fila(
+        cfg, S.Validador(CRITERIOS), object(), _fila(), ["c1", "c2"], sem,
+        {c["slug"]: c for c in CRITERIOS}))
+
+    por_slug = {r["slug"]: r for r in regs}
+    assert len(regs) == 2, "deben salir registros para los dos criterios"
+    assert por_slug["c1"]["estado"] == "OK", "lo que ADK sí devolvió se conserva"
+    assert por_slug["c1"]["nivel"] == "1"
+    assert por_slug["c2"]["estado"] == "BLOQUEADO", "lo que faltó pasa al respaldo"
+
+
+def test_el_reintento_solo_persigue_lo_que_falta(monkeypatch) -> None:
+    pedidos = []
+
+    async def observa(runner, payload, claves):
+        pedidos.append(sorted(claves))
+        if len(pedidos) == 1:
+            return {"cal_c1": {"aplicable": True, "nivel": "1", "justificacion": "x"}}
+        return {"cal_c2": {"aplicable": True, "nivel": "0", "justificacion": "y"}}
+
+    monkeypatch.setattr(S, "evaluar_payload", observa)
+    cfg = cargar_config("piloto")
+    cfg.max_intentos = 3
+    regs = asyncio.run(S._evaluar_fila(
+        cfg, S.Validador(CRITERIOS), object(), _fila(), ["c1", "c2"],
+        asyncio.Semaphore(1), {c["slug"]: c for c in CRITERIOS}))
+
+    assert pedidos[0] == ["cal_c1", "cal_c2"]
+    assert pedidos[1] == ["cal_c2"], f"el reintento pidió de más: {pedidos[1]}"
+    assert all(r["estado"] == "OK" for r in regs)
