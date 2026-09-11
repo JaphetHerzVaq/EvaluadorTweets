@@ -125,6 +125,20 @@ if r.get("estado") in {"OK", "NO_APLICABLE"}:
 
 `NO_APLICABLE` **sí** es un resultado terminado: es el modelo respondiendo que el criterio no aplica, no un fallo. Confundirlo con error dispararía la recalificación del 74% del corpus y multiplicaría el gasto sin razón.
 
+Dicho eso, hay casos legítimos para recalificar más que los fallos —cambió la instrucción, cambió el modelo, se quiere medir estabilidad— así que el alcance se declara en vez de quedar fijo:
+
+| Alcance | Qué recalifica | Pares hoy | Costo aprox. |
+|---|---|---|---|
+| `fallidos` (por defecto) | `ERROR` y `SIN_RESPUESTA` | 2,540 | ~$1 |
+| `sin-nivel` | lo anterior más `NO_APLICABLE` | 10,126 | ~$4 |
+| `todo` | la selección entera, ignorando el checkpoint | 10,248 | ~$4 |
+
+`fallidos` es el único que no repite gasto ya hecho, y por eso es el defecto. Los otros dos reportan el conteo y el costo antes de pedir confirmación, y `todo` advierte explícitamente que está repitiendo trabajo pagado.
+
+La diferencia entre `sin-nivel` y `todo` es pequeña hoy (122 pares `OK`) pero conceptualmente distinta: `sin-nivel` consulta el checkpoint para decidir, `todo` no lo consulta en absoluto. El segundo es el que sirve cuando se sospecha que los resultados previos son inválidos, no que falten.
+
+En los tres casos el checkpoint es append-only: los registros previos no se borran, y la lectura resuelve cada par por su registro válido más reciente. Una recalificación interrumpida a la mitad nunca deja el archivo peor que como estaba.
+
 Es un cambio de comportamiento observable —reanudar sobre un checkpoint con fallos ahora gasta dinero— y por eso va marcado como **BREAKING** en la propuesta. Es también el único camino para desbloquear los 2,540 pares.
 
 La política de deduplicación en lectura pasa de `keep="last"` a *último bueno, si no hay ninguno el último*. Hoy da idéntico resultado (verificado: cero pares afectados), pero una vez que los fallos se reintentan, la secuencia `ERROR → OK` se vuelve común y la regla debe ser explícita.

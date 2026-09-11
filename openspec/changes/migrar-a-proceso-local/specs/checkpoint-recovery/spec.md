@@ -38,6 +38,30 @@ El sistema SHALL considerar completado un par tweet-criterio únicamente cuando 
 - **WHEN** todos los pares de la selección tienen estado de resultado en el checkpoint
 - **THEN** el sistema informa que no hay nada pendiente y termina sin emitir llamadas
 
+### Requirement: El alcance de la recalificación es configurable
+
+El sistema SHALL permitir declarar qué pares de un checkpoint existente se vuelven a calificar, con al menos tres alcances: únicamente los que tienen estado de fallo, los que no tienen nivel asignado, y la totalidad de la selección sin importar su estado. El alcance por defecto MUST ser el de fallos, por ser el único que no repite gasto ya realizado. Todo alcance más amplio MUST reportar cuántos pares implica y su costo estimado antes de emitir la primera llamada.
+
+#### Scenario: Alcance de fallos, por defecto
+
+- **WHEN** se reanuda una corrida sin declarar alcance
+- **THEN** sólo se recalifican los pares con estado de fallo, y los pares con estado de resultado se conservan sin volver a pagarse
+
+#### Scenario: Alcance de pares sin nivel asignado
+
+- **WHEN** se reanuda declarando el alcance de pares sin nivel asignado
+- **THEN** se recalifican tanto los pares con estado de fallo como los declarados no aplicables, porque ninguno de los dos tiene nivel, y se reportan ambos conteos por separado antes de confirmar el gasto
+
+#### Scenario: Alcance total
+
+- **WHEN** se reanuda declarando el alcance total
+- **THEN** se recalifica toda la selección sin consultar los estados del checkpoint, y el sistema advierte que se está repitiendo gasto ya realizado antes de pedir la confirmación
+
+#### Scenario: Los resultados previos no se destruyen
+
+- **WHEN** se recalifica con cualquier alcance sobre un checkpoint existente
+- **THEN** los registros previos permanecen en el archivo y la lectura de resultados resuelve cada par por su registro válido más reciente, de modo que una recalificación fallida no borra lo que ya había
+
 ### Requirement: La lectura de resultados resuelve las repeticiones por último resultado válido
 
 El sistema SHALL resolver los registros repetidos de un mismo par tweet-criterio conservando el último con estado de resultado. Cuando ningún registro del par tenga estado de resultado, el sistema MUST conservar el último registro escrito.

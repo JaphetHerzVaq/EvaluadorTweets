@@ -85,6 +85,21 @@ concurrencia  = 8
 reciclar_cada = 200                   # filas por runner, para no acumular sesiones
 max_intentos  = 5
 
+# Qué pares de un checkpoint existente se vuelven a calificar:
+#   "fallidos"  → sólo ERROR y SIN_RESPUESTA. Es el defecto: el único alcance
+#                 que no repite gasto ya realizado. Hoy son 2,540 pares (~$1).
+#   "sin-nivel" → lo anterior más NO_APLICABLE, es decir todo lo que quedó sin
+#                 nivel asignado. Hoy 10,126 pares (~$4). Útil si cambió la
+#                 instrucción o la rúbrica: con la instrucción actual el
+#                 modelo volvería a responder NO_APLICABLE.
+#   "todo"      → la selección entera, sin consultar el checkpoint. Hoy 10,248
+#                 pares (~$4). Es el alcance para cuando se sospecha que los
+#                 resultados previos son inválidos, no que falten.
+# Los tres reportan conteo y costo antes de pedir confirmación del gasto, y
+# ninguno borra registros: el checkpoint es append-only y la lectura resuelve
+# cada par por su registro válido más reciente.
+alcance_recalificacion = "fallidos"
+
 # ── Salida ────────────────────────────────────────────────────────────────
 salida_ancho = "tweets_calificados.csv"
 salida_tidy  = "tweets_calificados_tidy.csv"

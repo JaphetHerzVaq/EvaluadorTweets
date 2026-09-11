@@ -46,6 +46,26 @@ class ErrorDeConfiguracion(RuntimeError):
     """Configuración ausente, mal formada o incoherente."""
 
 
+class InsumoAusente(FileNotFoundError):
+    """Falta un artefacto de entrada que otra etapa debía producir."""
+
+
+def exigir_insumo(ruta: Path, descripcion: str, producido_por: str | None = None) -> Path:
+    """Devuelve `ruta` si existe; si no, falla nombrando qué falta y quién lo genera.
+
+    En el cuaderno, un archivo ausente disparaba la rama de subida interactiva
+    y, fuera de Colab, eso producía ``ImportError: google.colab`` — un
+    diagnóstico que manda a investigar el problema equivocado. Aquí el error
+    dice la ruta esperada y la etapa que la produce.
+    """
+    if ruta.exists():
+        return ruta
+    mensaje = f"Falta {descripcion}.\n  Se esperaba en: {ruta}"
+    if producido_por:
+        mensaje += f"\n  Lo produce la etapa: {producido_por}"
+    raise InsumoAusente(mensaje)
+
+
 # ──────────────────────────────────────────────────────────────────────────
 #  Períodos
 # ──────────────────────────────────────────────────────────────────────────
@@ -188,6 +208,7 @@ class Config:
     reciclar_cada: int
     max_intentos: int
     checkpoint: Path
+    alcance_recalificacion: str         # "fallidos" | "sin-nivel" | "todo"
 
     # Salida
     salida_ancho: Path
@@ -243,6 +264,37 @@ class Config:
             f"  períodos     {len(self.periodos)} · día en {self.zona_horaria} · "
             f"{' | '.join(p.nombre for p in self.periodos)}"
         )
+
+
+# Alcances de recalificación. El orden es de menor a mayor gasto, y 'fallidos'
+# es el defecto por ser el único que no repite trabajo ya pagado.
+ALCANCES = {
+    "fallidos":  "sólo los pares con estado de fallo (ERROR, SIN_RESPUESTA)",
+    "sin-nivel": "los de fallo más los declarados no aplicables: todo lo que quedó sin nivel",
+    "todo":      "la selección entera, sin consultar los estados del checkpoint",
+}
+
+#: Estados que cuentan como resultado terminado. NO_APLICABLE es el modelo
+#: respondiendo que el criterio no aplica, no un fallo: confundirlo con error
+#: dispararía la recalificación del 74% del corpus sin razón.
+ESTADOS_RESULTADO = frozenset({"OK", "NO_APLICABLE"})
+
+#: Estados de resultado que además traen un nivel asignado.
+ESTADOS_CON_NIVEL = frozenset({"OK"})
+
+
+def estados_a_conservar(alcance: str) -> frozenset[str]:
+    """Estados cuyos pares NO se recalifican bajo este alcance."""
+    if alcance == "fallidos":
+        return ESTADOS_RESULTADO
+    if alcance == "sin-nivel":
+        return ESTADOS_CON_NIVEL
+    if alcance == "todo":
+        return frozenset()
+    raise ErrorDeConfiguracion(
+        f"Alcance de recalificación desconocido: {alcance!r}. "
+        f"Válidos: {sorted(ALCANCES)}"
+    )
 
 
 _CLAVES_RUTA = {
@@ -314,6 +366,14 @@ def cargar_config(perfil: str | None = None,
     if faltantes:
         raise ErrorDeConfiguracion(
             f"Faltan parámetros en '{p}' (perfil «{elegido}»): {faltantes}"
+        )
+
+    alcance = valores.get("alcance_recalificacion")
+    if alcance not in ALCANCES:
+        raise ErrorDeConfiguracion(
+            f"'alcance_recalificacion' no válido en '{p}' (perfil «{elegido}»): "
+            f"{alcance!r}.\n" +
+            "\n".join(f"  «{k}» → {v}" for k, v in ALCANCES.items())
         )
 
     return Config(perfil=elegido, periodos=periodos, precios=precios, raiz=raiz, **valores)

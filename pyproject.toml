@@ -20,6 +20,10 @@ dependencies = [
 #           pipeline emite decenas de miles de llamadas de pago
 # El entorno de desarrollo verificado es 3.12.10.
 
+[project.optional-dependencies]
+# Sólo para desarrollo. El pipeline no las necesita para correr.
+dev = ["pytest>=8.0"]
+
 [project.scripts]
 evaluador = "evaluador.__main__:main"
 

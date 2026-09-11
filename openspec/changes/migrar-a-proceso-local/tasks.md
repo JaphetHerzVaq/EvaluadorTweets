@@ -26,11 +26,11 @@
 
 ## 4. Eliminación de las dependencias de entorno alojado
 
-- [ ] 4.1 Implementar la utilidad de lectura de insumos que falla con la ruta esperada y la etapa que la produce, sin módulo adaptador
-- [ ] 4.2 Verificar que ningún módulo del paquete importa bibliotecas de entorno de cuaderno alojado
-- [ ] 4.3 Verificar que `nest_asyncio` no figura en las dependencias declaradas ni se importa en ningún módulo
-- [ ] 4.4 Confirmar que las corrutinas se ejecutan con `asyncio.run()` y que la prueba de humo pasa sin parche de reentrada
-- [ ] 4.5 Confirmar que la etapa de graficación escribe el HTML a disco y reporta su ruta, sin intentar visualización incrustada
+- [x] 4.1 Implementar la utilidad de lectura de insumos que falla con la ruta esperada y la etapa que la produce, sin módulo adaptador
+- [x] 4.2 Verificar que ningún módulo del paquete importa bibliotecas de entorno de cuaderno alojado
+- [x] 4.3 Verificar que `nest_asyncio` no figura en las dependencias declaradas ni se importa en ningún módulo
+- [ ] 4.4 Confirmar que las corrutinas se ejecutan con `asyncio.run()` y que la prueba de humo pasa sin parche de reentrada _(bloqueada: requiere `scoring.py`, grupo 6)_
+- [ ] 4.5 Confirmar que la etapa de graficación escribe el HTML a disco y reporta su ruta, sin intentar visualización incrustada _(bloqueada: requiere `viz.py`, grupo 10)_
 
 ## 5. Traslado de las etapas de preparación
 
@@ -81,6 +81,9 @@
 - [ ] 9.4 Cambiar la deduplicación en lectura a último resultado válido, con caída al último registro escrito cuando no haya ninguno válido
 - [ ] 9.5 Implementar la verificación de correspondencia de criterios entre checkpoint y rúbrica vigente, con rechazo de la reanudación ante discrepancia salvo bandera explícita
 - [ ] 9.6 Reportar antes de reanudar cuántos pares se recuperan, cuántos se recalifican y el costo estimado, exigiendo confirmación de gasto
+- [ ] 9.10 Implementar los tres alcances de recalificación: `fallidos` (defecto), `sin-nivel` y `todo`, con `todo` ignorando por completo los estados del checkpoint
+- [ ] 9.11 Hacer que los alcances más amplios que `fallidos` reporten su conteo desglosado y adviertan que repiten gasto ya realizado antes de pedir confirmación
+- [ ] 9.12 Verificar que recalificar con cualquier alcance no borra registros previos y que la lectura sigue resolviendo cada par por su registro válido más reciente
 - [ ] 9.7 Incorporar `checkpoint (7).jsonl` al proyecto con un nombre estable y auditarlo
 - [ ] 9.8 Confirmar sobre la auditoría el reparto esperado de 7,708 pares recuperables y 2,540 a recalificar
 - [ ] 9.9 Verificar que una reanudación sobre pares ya resueltos no emite ninguna llamada
