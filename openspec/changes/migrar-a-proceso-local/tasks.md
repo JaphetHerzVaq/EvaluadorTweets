@@ -30,7 +30,7 @@
 - [x] 4.2 Verificar que ningún módulo del paquete importa bibliotecas de entorno de cuaderno alojado
 - [x] 4.3 Verificar que `nest_asyncio` no figura en las dependencias declaradas ni se importa en ningún módulo
 - [x] 4.4 Confirmar que las corrutinas se ejecutan con `asyncio.run()` y que la prueba de humo pasa sin parche de reentrada _(bloqueada: requiere `scoring.py`, grupo 6)_
-- [ ] 4.5 Confirmar que la etapa de graficación escribe el HTML a disco y reporta su ruta, sin intentar visualización incrustada _(bloqueada: requiere `viz.py`, grupo 10)_
+- [x] 4.5 Confirmar que la etapa de graficación escribe el HTML a disco y reporta su ruta, sin intentar visualización incrustada _(bloqueada: requiere `viz.py`, grupo 10)_
 
 ## 5. Traslado de las etapas de preparación
 
@@ -101,17 +101,17 @@ grupo deben corregir ambas cosas.
 
 ## 10. Exportación y visualización
 
-- [ ] 10.1 Trasladar a `export.py` la generación de nombres de columna, el merge al corpus original, la verificación de integridad y la escritura con marca de orden de bytes
-- [ ] 10.2 Trasladar a `viz.py` la preparación con fecha local y asignación de período, la agregación y la generación del HTML
-- [ ] 10.3 Verificar que el CSV ancho conserva el conteo de filas del corpus y que los identificadores largos no pierden precisión
-- [ ] 10.4 Verificar que el HTML generado abre fuera del cuaderno con los filtros funcionando
+- [x] 10.1 Trasladar a `export.py` la generación de nombres de columna, el merge al corpus original, la verificación de integridad y la escritura con marca de orden de bytes
+- [x] 10.2 Trasladar a `viz.py` la preparación con fecha local y asignación de período, la agregación y la generación del HTML
+- [x] 10.3 Verificar que el CSV ancho conserva el conteo de filas del corpus y que los identificadores largos no pierden precisión
+- [x] 10.4 Verificar que el HTML generado abre fuera del cuaderno con los filtros funcionando
 
 ## 11. Interfaz de línea de comandos
 
-- [ ] 11.1 Implementar `__main__.py` con los subcomandos `reparar`, `traducir`, `rubrica`, `correr`, `exportar`, `graficar` y `auditar`
-- [ ] 11.2 Implementar la bandera de selección de perfil y la de confirmación de gasto en los subcomandos que lo requieren
-- [ ] 11.3 Verificar que cada etapa falla con error accionable cuando falta su insumo, nombrando la ruta y la etapa que la produce
-- [ ] 11.4 Verificar que una etapa con su salida ya presente informa y termina sin recalcular
+- [x] 11.1 Implementar `__main__.py` con los subcomandos `reparar`, `traducir`, `rubrica`, `correr`, `exportar`, `graficar` y `auditar`
+- [x] 11.2 Implementar la bandera de selección de perfil y la de confirmación de gasto en los subcomandos que lo requieren
+- [x] 11.3 Verificar que cada etapa falla con error accionable cuando falta su insumo, nombrando la ruta y la etapa que la produce
+- [x] 11.4 Verificar que una etapa con su salida ya presente informa y termina sin recalcular
 - [ ] 11.5 Ejecutar el pipeline completo de extremo a extremo en local sobre el perfil `piloto`
 
 ## 12. Preservación del cuaderno como memoria

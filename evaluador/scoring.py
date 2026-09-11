@@ -32,7 +32,8 @@ from pydantic import BaseModel, Field
 
 from .adk import (LlmAgent, ParallelAgent, config_generacion, construir_modelo,
                   ejecutar_agente)
-from .config import (ALCANCES, Config, ESTADOS_RESULTADO, estados_a_conservar)
+from .config import (ALCANCES, Config, ESTADOS_RESULTADO,
+                     estados_a_conservar, exigir_insumo)
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -287,8 +288,10 @@ def estimar_costo(cfg: Config, sub: pd.DataFrame, criterios: list[dict],
     escribir(f"  costo salida       ${t_out / 1e6 * p_out:>8.2f}   ← la salida domina")
     escribir(f"  COSTO TOTAL        ${costo:>8.2f}")
     escribir(f"  por criterio       ${costo / max(n_criterios, 1):>8.2f}")
-    escribir(f"  tiempo aprox.      {llamadas / cfg.concurrencia * 2 / 60:>8.0f} min "
-             f"(concurrencia {cfg.concurrencia})")
+    filas_vuelo = cfg.filas_en_vuelo(n_criterios)
+    escribir(f"  tiempo aprox.      {len(sub) / filas_vuelo * 8 / 60:>8.0f} min "
+             f"({cfg.llamadas_simultaneas} llamadas simultáneas = "
+             f"{filas_vuelo} filas en vuelo)")
     escribir(f"{'=' * 72}")
     if cfg.presupuesto_razonamiento != 0:
         escribir("  💡 presupuesto_razonamiento=0 reduciría el costo ~2.7×")
@@ -639,8 +642,7 @@ def cargar_resultados(ruta: Path) -> pd.DataFrame:
     reintenten la secuencia ERROR → OK se vuelve común y la regla debe ser
     explícita.
     """
-    if not ruta.exists():
-        raise FileNotFoundError(f"No existe el checkpoint '{ruta}'.")
+    exigir_insumo(ruta, "el checkpoint con los resultados", "correr")
     filas = []
     with ruta.open(encoding="utf-8") as fh:
         for linea in fh:
@@ -675,8 +677,7 @@ def auditar(ruta: Path, criterios: list[dict] | None = None,
     14 veces del mismo par, y 15,384 de esos registros eran el mismo error de
     programación. Nada en el archivo lo decía.
     """
-    if not ruta.exists():
-        raise FileNotFoundError(f"No existe el checkpoint '{ruta}'.")
+    exigir_insumo(ruta, "el checkpoint a auditar", "correr")
 
     registros = 0
     ilegibles = 0

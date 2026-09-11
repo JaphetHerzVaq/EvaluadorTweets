@@ -96,3 +96,34 @@ def test_un_simbolo_inexistente_rompe_al_importar(tmp_path: Path) -> None:
         sys.path.remove(str(tmp_path))
         for m in [k for k in sys.modules if k.startswith("paquete_roto")]:
             del sys.modules[m]
+
+
+def test_todo_atributo_de_config_usado_existe() -> None:
+    """El análogo en tiempo de ejecución de la prueba de importación.
+
+    Un `from .x import y` roto falla al importar, pero `cfg.parametro_viejo`
+    no falla hasta que esa línea se ejecuta — que puede ser a mitad de una
+    corrida de pago. Ocurrió de verdad durante este traslado: al renombrar
+    `concurrencia` por `llamadas_simultaneas`, `estimar_costo` se quedó con la
+    referencia vieja y las 39 pruebas siguieron pasando, porque ninguna llegaba
+    a esa línea. Lo destapó el primer uso real de la línea de comandos.
+    """
+    from evaluador.config import Config
+
+    campos = set(Config.__dataclass_fields__)
+    metodos = {n for n in dir(Config) if not n.startswith("__")}
+    conocidos = campos | metodos
+
+    malos: list[str] = []
+    for archivo in sorted(PAQUETE.glob("*.py")):
+        arbol = ast.parse(archivo.read_text(encoding="utf-8"), filename=str(archivo))
+        for nodo in ast.walk(arbol):
+            if (isinstance(nodo, ast.Attribute)
+                    and isinstance(nodo.value, ast.Name)
+                    and nodo.value.id == "cfg"
+                    and nodo.attr not in conocidos):
+                malos.append(
+                    f"{archivo.relative_to(RAIZ)}:{nodo.lineno} usa "
+                    f"cfg.{nodo.attr}, que Config no define"
+                )
+    assert not malos, "Atributos inexistentes de Config:\n  " + "\n  ".join(malos)
