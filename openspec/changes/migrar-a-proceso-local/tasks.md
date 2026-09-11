@@ -132,6 +132,9 @@ pares «recuperables» quedan obsoletos: se produjeron con otro instrumento.
 - [x] 13.7 Implementar `verificar_anclaje()` y conectarlo al CLI antes de la compuerta de gasto
 - [x] 13.8 Implementar `huella()` de contenido de la rúbrica y rehusar la reanudación cuando cambia, porque cotejar slugs no basta
 - [x] 13.9 Reparsear el PDF anclado y verificar 20/20 niveles con el objeto de estudio nombrado
+- [ ] 13.12 Implementar el respaldo por llamada directa cuando ADK agota sus reintentos para un criterio, con el `block_reason` del proveedor para marcar `BLOQUEADO`
+- [ ] 13.13 Dejar de reintentar los pares `BLOQUEADO` en las reanudaciones, y verificar que el conteo de fallidas deja de incluirlos
+- [ ] 13.14 Rescatar con el respaldo los 33 pares de los 56 que la vía directa sí resuelve
 - [ ] 13.10 Corrida completa sobre el corpus de 2,631 con la rúbrica anclada, en checkpoint nuevo
 - [ ] 13.11 Verificar sobre el resultado que la proporción de calificaciones sobre tuits sin mención de México bajó respecto al 55% previo
 
@@ -141,4 +144,4 @@ pares «recuperables» quedan obsoletos: se produjeron con otro instrumento.
 - [ ] 13.3 Auditar el checkpoint resultante y confirmar que no quedan pares en estado de fallo
 - [ ] 13.4 Contrastar el costo real de la recalificación contra la estimación previa
 - [ ] 13.5 Exportar y graficar sobre el checkpoint completo, verificando integridad de conteos e identificadores
-- [ ] 13.6 Registrar como cambio aparte el problema de modelado pendiente: la colisión entre el nivel «0» de la rúbrica y la regla de aplicabilidad, su efecto destructivo sobre el criterio binario, y la necesidad de que la escala de niveles y los niveles de ausencia dejen de ser parámetros globales
+- [x] 13.6 Registrado como cambio aparte `anclar-semantica-de-ausencia`: la colisión entre el nivel «0» y la bandera `aplicable`, su efecto destructivo sobre el criterio binario, y la necesidad de tipar la escala por criterio

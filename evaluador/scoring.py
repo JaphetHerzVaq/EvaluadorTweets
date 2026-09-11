@@ -2,18 +2,22 @@
 
 Traslado de las celdas 12 a 18 del cuaderno.
 
-IMPORTANTE — este módulo se traslada con los defectos del cuaderno INTACTOS,
-a propósito. El grupo 7 del cambio `migrar-a-proceso-local` corre un piloto de
-fidelidad contra `checkpoint_piloto.jsonl` para comprobar que el traslado no
-alteró el comportamiento; sólo después, el grupo 8 aplica los arreglos. Si se
-arreglara aquí, un fallo del piloto no distinguiría entre error de traslado y
-efecto del arreglo.
+El traslado se hizo primero con los defectos del cuaderno intactos, y el piloto
+de fidelidad confirmó 98.9% de coincidencia contra la corrida de Colab antes de
+tocarlos. Los arreglos vinieron después, para que un fallo del piloto no se
+confundiera con el efecto de un arreglo.
 
-Los defectos conocidos, cada uno marcado en su sitio:
-  · `claves_completadas` cuenta los fallos como trabajo hecho (tarea 9.3)
-  · un resultado parcial retorna en vez de lanzar excepción (tarea 8.5)
-  · el semáforo cuenta filas, no llamadas (tarea 8.7)
-  · `motivo_fallo` no distingue lo permanente de lo transitorio (tarea 8.1)
+Correcciones aplicadas respecto al cuaderno:
+  · la reanudación distingue resultado de fallo, así que un fallo ya no queda
+    cementado (era lo que congeló 2,540 pares)
+  · un resultado parcial lanza excepción y entra al reintento
+  · los fallos estructurales abortan la corrida en vez de reintentarse
+  · un cortacircuitos detiene una racha larga de fallos
+  · el semáforo cuenta llamadas, no filas
+  · toda llamada tiene tiempo límite
+  · agotados los reintentos de ADK, un respaldo por llamada directa recupera
+    los criterios que ADK no resuelve y expone el motivo cuando el proveedor
+    sí rechaza la respuesta
 """
 
 from __future__ import annotations
@@ -21,6 +25,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import threading
 import time
 from pathlib import Path
 
@@ -465,7 +470,8 @@ def motivo_fallo(exc: Exception) -> str:
 # ──────────────────────────────────────────────────────────────────────────
 
 async def _evaluar_fila(cfg: Config, validador: Validador, runner, fila,
-                        pendientes: list[str], sem) -> list[dict]:
+                        pendientes: list[str], sem,
+                        criterios_por_slug: dict | None = None) -> list[dict]:
     """Califica una fila contra sus criterios pendientes.
 
     Lanza :class:`FalloEstructural` si el error afecta a todas las filas: quien
@@ -511,6 +517,23 @@ async def _evaluar_fila(cfg: Config, validador: Validador, runner, fila,
                 if motivo_fallo(exc) == "BLOQUEADO" or intento == cfg.max_intentos:
                     break
                 await asyncio.sleep(min(2 ** intento, cfg.retraso_maximo))
+
+        # Agotados los reintentos de ADK, se intenta una vez por la vía
+        # directa. Recupera los casos donde el fallo era de ADK y no del
+        # modelo, y para los que el proveedor sí rechaza obtiene el motivo,
+        # que ADK no expone.
+        if criterios_por_slug is not None and isinstance(ultimo, ResultadoParcial):
+            try:
+                return await rescatar_faltantes(
+                    cfg, validador, fila, criterios_por_slug,
+                    ultimo.faltantes, tweet_id)
+            except Exception as exc:
+                if es_estructural(exc):
+                    raise FalloEstructural(
+                        f"fallo estructural en el respaldo directo del tuit "
+                        f"{tweet_id}: {type(exc).__name__}: {exc}"
+                    ) from exc
+                ultimo = exc
 
         motivo = motivo_fallo(ultimo)
         return [{"tweet_id": tweet_id, "slug": slug, "aplicable": False, "nivel": None,
@@ -569,6 +592,7 @@ async def correr(cfg: Config, sub: pd.DataFrame, criterios: list[dict],
     if rubrica is not None:
         registrar_huella(ruta, rubrica)
 
+    criterios_por_slug = {c["slug"]: c for c in criterios}
     sem = asyncio.Semaphore(filas_vuelo)
     ok = fallidas = 0
     seguidas = 0            # fallos consecutivos, para el cortacircuitos
@@ -583,7 +607,8 @@ async def correr(cfg: Config, sub: pd.DataFrame, criterios: list[dict],
             runner = InMemoryRunner(agent=equipo, app_name=f"run_{ini}")
 
             tareas = [asyncio.ensure_future(
-                          _evaluar_fila(cfg, validador, runner, f, p, sem))
+                          _evaluar_fila(cfg, validador, runner, f, p, sem,
+                                        criterios_por_slug))
                       for f, p in bloque]
             try:
                 for fut in asyncio.as_completed(tareas):
@@ -887,3 +912,98 @@ def estimar_recalificacion(ruta: Path, sub: pd.DataFrame, criterios: list[dict],
                  f"sólo se\n      recalificaría lo que falló.")
     escribir(f"{'=' * 72}")
     return {"total": total, "recuperados": recuperados, "recalificar": recalificar}
+
+# ──────────────────────────────────────────────────────────────────────────
+#  Respaldo por llamada directa
+# ──────────────────────────────────────────────────────────────────────────
+# Cuando el ParallelAgent de ADK agota sus reintentos para un criterio, el
+# motor no sabe por qué: ADK no propaga excepción cuando no hay estado, sólo
+# omite la clave. Medido sobre los 56 fallos de la corrida completa,
+# reintentándolos uno a uno por esta vía:
+#
+#     33 (59%)  respondieron sin problema  -> era la ruta de ADK, no el modelo
+#     23 (41%)  BlockedReason.PROHIBITED_CONTENT  -> bloqueo real del proveedor
+#
+# El respaldo recupera los primeros y obtiene el motivo de los segundos, que es
+# justo lo que ADK se traga. Un par marcado BLOQUEADO deja de reintentarse en
+# las reanudaciones: es una decisión del proveedor sobre ese texto, no un fallo
+# pasajero, y reintentarlo es gasto garantizado sin resultado.
+
+_CLIENTE_DIRECTO: genai.Client | None = None
+_CANDADO_DIRECTO = threading.Lock()
+
+
+def _cliente_directo() -> genai.Client:
+    """Perezoso y con candado, por la misma razón que en traduccion.py: varios
+    hilos construyendo a la vez dejan a uno sin referencias, el recolector lo
+    cierra, y el que lo tenía en la mano recibe 'client has been closed'."""
+    global _CLIENTE_DIRECTO
+    if _CLIENTE_DIRECTO is None:
+        with _CANDADO_DIRECTO:
+            if _CLIENTE_DIRECTO is None:
+                _CLIENTE_DIRECTO = genai.Client()
+    return _CLIENTE_DIRECTO
+
+
+def _config_directa(cfg: Config, instruccion: str) -> types.GenerateContentConfig:
+    return types.GenerateContentConfig(
+        temperature=cfg.temperatura,
+        response_mime_type="application/json",
+        response_schema=Calificacion,
+        system_instruction=instruccion,
+        thinking_config=types.ThinkingConfig(thinking_budget=cfg.presupuesto_razonamiento),
+    )
+
+
+def _llamar_directo(cfg: Config, instruccion: str, payload: str):
+    return _cliente_directo().models.generate_content(
+        model=cfg.modelo, contents=payload, config=_config_directa(cfg, instruccion))
+
+
+async def evaluar_directo(cfg: Config, criterio: dict, payload: str) -> dict:
+    """Califica UN criterio sin pasar por ADK.
+
+    Devuelve ``{"cruda": dict}`` si el modelo respondió, o
+    ``{"bloqueado": motivo}`` si el proveedor rechazó la respuesta.
+    """
+    respuesta = await asyncio.wait_for(
+        asyncio.to_thread(_llamar_directo, cfg, instruccion_para(cfg, criterio), payload),
+        timeout=cfg.timeout_llamada,
+    )
+    if respuesta.text is None:
+        realim = getattr(respuesta, "prompt_feedback", None)
+        motivo = getattr(getattr(realim, "block_reason", None), "name", None)
+        candidato = (getattr(respuesta, "candidates", None) or [None])[0]
+        if motivo is None:
+            motivo = str(getattr(candidato, "finish_reason", None) or "SIN_TEXTO")
+        return {"bloqueado": motivo}
+    return {"cruda": json.loads(respuesta.text)}
+
+
+async def rescatar_faltantes(cfg: Config, validador: Validador, fila,
+                             criterios_por_slug: dict, faltantes: list[str],
+                             tweet_id: str) -> list[dict]:
+    """Intenta por la vía directa los criterios que ADK no pudo resolver."""
+    registros = []
+    for slug in faltantes:
+        criterio = criterios_por_slug[slug]
+        base = {"tweet_id": tweet_id, "slug": slug,
+                "contexto_incompleto": fila["contexto_incompleto"]}
+        try:
+            r = await evaluar_directo(cfg, criterio, fila["_payload"])
+        except Exception as exc:
+            registros.append({**base, "aplicable": False, "nivel": None, "puntaje": None,
+                              "justificacion": "", "estado": motivo_fallo(exc),
+                              "detalle": f"respaldo directo: {str(exc)[:240]}"})
+            continue
+
+        if "bloqueado" in r:
+            registros.append({**base, "aplicable": False, "nivel": None, "puntaje": None,
+                              "justificacion": "", "estado": "BLOQUEADO",
+                              "detalle": f"el proveedor rechazó la respuesta: {r['bloqueado']}"})
+        else:
+            reg = validador.validar(slug, r["cruda"])
+            reg.update(base)
+            reg["detalle"] = (reg.get("detalle") or "") + " (resuelto por respaldo directo)"
+            registros.append(reg)
+    return registros

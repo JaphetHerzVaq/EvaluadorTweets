@@ -27,5 +27,8 @@ dev = ["pytest>=8.0"]
 [project.scripts]
 evaluador = "evaluador.__main__:main"
 
+[tool.setuptools.package-data]
+evaluador = ["plantilla_graficas.html", "echarts.min.js"]
+
 [tool.setuptools.packages.find]
 include = ["evaluador*"]

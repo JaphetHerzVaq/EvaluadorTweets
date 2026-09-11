@@ -299,10 +299,17 @@ ALCANCES = {
     "todo":      "la selección entera, sin consultar los estados del checkpoint",
 }
 
-#: Estados que cuentan como resultado terminado. NO_APLICABLE es el modelo
-#: respondiendo que el criterio no aplica, no un fallo: confundirlo con error
-#: dispararía la recalificación del 74% del corpus sin razón.
-ESTADOS_RESULTADO = frozenset({"OK", "NO_APLICABLE"})
+#: Estados que cuentan como terminados y no se recalifican.
+#:
+#: NO_APLICABLE es el modelo respondiendo que el criterio no aplica, no un
+#: fallo: confundirlo con error dispararía la recalificación del 74% del
+#: corpus sin razón.
+#:
+#: BLOQUEADO es el proveedor rechazando la respuesta para ese texto. Se
+#: confirma por la vía directa, que sí expone el motivo, y es permanente:
+#: reintentarlo en cada reanudación es gasto garantizado sin resultado. De los
+#: 56 fallos de la corrida completa, 23 resultaron ser esto.
+ESTADOS_RESULTADO = frozenset({"OK", "NO_APLICABLE", "BLOQUEADO"})
 
 #: Estados de resultado que además traen un nivel asignado.
 ESTADOS_CON_NIVEL = frozenset({"OK"})

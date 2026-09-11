@@ -129,10 +129,21 @@ califique bien, sino que falle temprano:
   como `aplicable=false` y 12 como nivel «0». Para el criterio binario de
   saliencia de violencia esto es destructivo — «violencia ausente» deja de
   distinguirse de «fuera de alcance». Pendiente de un cambio de modelado.
-- **Un bloqueo de contenido llega como `SIN_RESPUESTA`.** ADK no propaga
-  excepción cuando el filtro rechaza una respuesta; simplemente no emite
-  estado. Esas filas se reintentan en cada reanudación y nunca se resuelven.
-  Observado: 0.4% del piloto.
+- **`SIN_RESPUESTA` mezcla dos causas distintas.** Cuando el `ParallelAgent`
+  de ADK no emite estado para un criterio, el motor no puede saber por qué.
+  Medido sobre los 56 fallos de la corrida completa, reintentándolos uno a uno
+  por llamada directa a la API:
+
+  | causa | pares | qué pasa |
+  |---|---|---|
+  | fallo de la ruta de ADK | 33 (59%) | la llamada directa **sí responde** con la misma instrucción y el mismo esquema |
+  | `PROHIBITED_CONTENT` | 23 (41%) | bloqueo real del proveedor, el único umbral que `safety_settings` no puede relajar |
+
+  Por eso `correr` cae a una llamada directa cuando ADK agota sus reintentos
+  para un criterio: recupera los primeros y obtiene el `block_reason` de los
+  segundos, que ADK se traga. Un par marcado `BLOQUEADO` deja de reintentarse.
+  Reproducible: con el tuit afectado, el criterio 3 falla en ADK incluso
+  corriendo solo y responde bien por la vía directa.
 - **Replies sin contexto.** Miles de filas son respuestas cuyo tuit padre no
   está en el corpus. Se marcan en `contexto_incompleto` y se advierte al
   modelo, pero el hilo no se reconstruye.

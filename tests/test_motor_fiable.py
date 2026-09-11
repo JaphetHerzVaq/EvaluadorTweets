@@ -380,3 +380,83 @@ def test_sin_huella_registrada_no_bloquea(tmp_path: Path) -> None:
     """Un checkpoint anterior a esta comprobación se sigue pudiendo reanudar."""
     ckpt = _checkpoint(tmp_path, [("t1", "c1", "OK")])
     S.verificar_correspondencia(ckpt, CRITERIOS, rubrica=_rubrica())
+
+
+# ──────────────────────────────────────────────────────────────────────────
+#  Respaldo por llamada directa
+# ──────────────────────────────────────────────────────────────────────────
+
+class _Resp:
+    """Respuesta mínima del cliente de google-genai."""
+
+    def __init__(self, text=None, motivo=None):
+        self.text = text
+        self.candidates = [type("C", (), {"finish_reason": None})()]
+        self.prompt_feedback = (
+            type("F", (), {"block_reason": type("B", (), {"name": motivo})()})()
+            if motivo else None)
+
+
+def _fila():
+    return {"id": "t1", "_payload": "p", "contexto_incompleto": ""}
+
+
+def test_el_respaldo_recupera_lo_que_adk_no_resolvio(monkeypatch) -> None:
+    """59% de los fallos reales eran esto: ADK no devolvía estado y la llamada
+    directa sí respondía, con la misma instrucción y el mismo esquema."""
+    monkeypatch.setattr(S, "_llamar_directo", lambda *a, **k: _Resp(
+        text=json.dumps({"aplicable": True, "nivel": "1", "justificacion": "x"})))
+
+    cfg = cargar_config("piloto")
+    regs = asyncio.run(S.rescatar_faltantes(
+        cfg, S.Validador(CRITERIOS), _fila(),
+        {c["slug"]: c for c in CRITERIOS}, ["c1"], "t1"))
+
+    assert len(regs) == 1
+    assert regs[0]["estado"] == "OK"
+    assert regs[0]["nivel"] == "1"
+    assert regs[0]["puntaje"] == 1.0
+    assert "respaldo directo" in regs[0]["detalle"]
+
+
+def test_el_respaldo_expone_el_motivo_del_bloqueo(monkeypatch) -> None:
+    """ADK se traga el block_reason; la vía directa lo entrega."""
+    monkeypatch.setattr(S, "_llamar_directo",
+                        lambda *a, **k: _Resp(motivo="PROHIBITED_CONTENT"))
+
+    cfg = cargar_config("piloto")
+    regs = asyncio.run(S.rescatar_faltantes(
+        cfg, S.Validador(CRITERIOS), _fila(),
+        {c["slug"]: c for c in CRITERIOS}, ["c1"], "t1"))
+
+    assert regs[0]["estado"] == "BLOQUEADO"
+    assert "PROHIBITED_CONTENT" in regs[0]["detalle"]
+
+
+def test_un_par_bloqueado_no_se_reintenta(tmp_path: Path) -> None:
+    """Es una decisión del proveedor sobre ese texto, no un fallo pasajero:
+    reintentarlo en cada reanudación es gasto garantizado sin resultado."""
+    ckpt = _checkpoint(tmp_path, [("t1", "c1", "BLOQUEADO"), ("t2", "c1", "ERROR")])
+    hechas = S.claves_completadas(ckpt, "fallidos")
+    assert ("t1", "c1") in hechas, "BLOQUEADO es terminal"
+    assert ("t2", "c1") not in hechas, "ERROR sí se reintenta"
+
+
+def test_el_alcance_todo_sigue_recalificando_los_bloqueados(tmp_path: Path) -> None:
+    ckpt = _checkpoint(tmp_path, [("t1", "c1", "BLOQUEADO")])
+    assert S.claves_completadas(ckpt, "todo") == set()
+
+
+def test_un_fallo_del_respaldo_no_pierde_la_fila(monkeypatch) -> None:
+    def explota(*a, **k):
+        raise RuntimeError("503 UNAVAILABLE")
+
+    monkeypatch.setattr(S, "_llamar_directo", explota)
+    cfg = cargar_config("piloto")
+    regs = asyncio.run(S.rescatar_faltantes(
+        cfg, S.Validador(CRITERIOS), _fila(),
+        {c["slug"]: c for c in CRITERIOS}, ["c1"], "t1"))
+
+    assert len(regs) == 1
+    assert regs[0]["estado"] == "ERROR_SERVIDOR"
+    assert regs[0]["tweet_id"] == "t1"

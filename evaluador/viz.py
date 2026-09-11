@@ -17,10 +17,20 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from .config import Config
+from .config import Config, exigir_insumo
 from .scoring import cargar_resultados
 
 RUTA_PLANTILLA = Path(__file__).parent / "plantilla_graficas.html"
+
+#: La biblioteca de gráficas viaja DENTRO del HTML, no desde un CDN.
+#:
+#: El cuaderno la cargaba de cdnjs con una versión que devuelve 404 —la 5.5.1
+#: no existe ahí— así que la página mostraba su mensaje de respaldo en vez de
+#: las gráficas. En Colab el fallo pasaba desapercibido entre las salidas de
+#: las celdas. Embeberla arregla eso y además hace el artefacto autosuficiente:
+#: un HTML de análisis debe poder abrirse dentro de dos años, sin red y sin que
+#: importe si ese CDN sigue sirviendo esa versión.
+RUTA_ECHARTS = Path(__file__).parent / "echarts.min.js"
 
 ETIQUETA_SIN_IDIOMA = "(sin idioma)"
 
@@ -351,6 +361,9 @@ def agregar(cfg: Config, viz: pd.DataFrame, criterios: list[dict],
 
 def construir_html(cfg: Config, datos: dict) -> str:
     plantilla = RUTA_PLANTILLA.read_text(encoding="utf-8")
+    biblioteca = exigir_insumo(
+        RUTA_ECHARTS, "la biblioteca de gráficas embebida",
+        "ninguna: viaja con el paquete").read_text(encoding="utf-8")
     p = datos["periodos"]
     sub = (f"{sum(x['tuits'] for x in p):,} tuits · {len(datos['fechas'])} días · "
            f"{len(datos['criterios'])} criterios · día cortado en {cfg.zona_horaria} · "
@@ -361,6 +374,7 @@ def construir_html(cfg: Config, datos: dict) -> str:
            "pocas cuentas aportan buena parte del volumen: un movimiento en la serie "
            "puede ser el humor de una persona.")
     return (plantilla
+            .replace("__ECHARTS__", biblioteca)
             .replace("__TITULO__", "Calificaciones por rúbrica")
             .replace("__SUBTITULO__", sub)
             .replace("__LIMITACION__", lim)

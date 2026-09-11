@@ -48,7 +48,8 @@
   <p class="sub">__SUBTITULO__</p>
   <div id="sinlib" class="fallo" hidden>
     No se pudo cargar la biblioteca de gráficas desde el CDN.<br>
-    La página necesita conexión a <code>cdnjs.cloudflare.com</code>. Los datos
+    La biblioteca va embebida en este archivo; si ves esto, el archivo está
+    truncado o corrupto. Los datos
     están embebidos y siguen en la tabla de cada panel.
   </div>
   <div id="app" hidden>
@@ -94,7 +95,7 @@
     <p class="nota">__LIMITACION__</p>
   </div>
 </div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.5.1/echarts.min.js"></script>
+<script>__ECHARTS__</script>
 <script>
 const D = __DATOS__;
 const PAL = __PAL_VAL__, PAL_IDIOMA = __PAL_IDIOMA__, C_AUS = "__C_AUS__";
