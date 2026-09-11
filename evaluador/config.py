@@ -31,13 +31,20 @@ def configurar_consola() -> None:
 
     El cuaderno nunca lo necesitó: Colab es UTF-8 de extremo a extremo. Es un
     requisito que sólo aparece al bajar a proceso local en Windows.
+
+    Activa además el volcado por líneas. Cuando la salida no va a una terminal
+    —redirigida a un archivo, a una tarea en segundo plano, a un registro— Python
+    almacena en búfer por bloques y no aparece nada hasta que el proceso
+    termina. En una corrida de horas eso equivale a no tener reporte de avance:
+    no hay forma de distinguir un proceso trabajando de uno colgado, que es
+    justo lo que hay que poder distinguir.
     """
     import sys
     for flujo in (sys.stdout, sys.stderr):
         reconfigurar = getattr(flujo, "reconfigure", None)
         if reconfigurar is not None:
             try:
-                reconfigurar(encoding="utf-8", errors="replace")
+                reconfigurar(encoding="utf-8", errors="replace", line_buffering=True)
             except (ValueError, OSError):
                 pass   # flujo redirigido a algo que no admite reconfiguración
 
@@ -207,6 +214,7 @@ class Config:
     concurrencia: int
     reciclar_cada: int
     max_intentos: int
+    timeout_llamada: float
     checkpoint: Path
     alcance_recalificacion: str         # "fallidos" | "sin-nivel" | "todo"
 

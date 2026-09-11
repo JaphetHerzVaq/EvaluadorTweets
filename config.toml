@@ -85,6 +85,13 @@ concurrencia  = 8
 reciclar_cada = 200                   # filas por runner, para no acumular sesiones
 max_intentos  = 5
 
+# Tiempo límite por llamada, en segundos. Sin tope, una petición que nunca
+# responde retiene su cupo del semáforo indefinidamente: se observó una fila
+# colgada más de quince minutos sin lanzar excepción. En una corrida de miles
+# de llamadas eso no se lee como error sino como lentitud, y acaba en una
+# corrida abandonada.
+timeout_llamada = 120
+
 # Qué pares de un checkpoint existente se vuelven a calificar:
 #   "fallidos"  → sólo ERROR y SIN_RESPUESTA. Es el defecto: el único alcance
 #                 que no repite gasto ya realizado. Hoy son 2,540 pares (~$1).

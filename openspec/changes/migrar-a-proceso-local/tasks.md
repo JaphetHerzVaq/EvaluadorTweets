@@ -29,7 +29,7 @@
 - [x] 4.1 Implementar la utilidad de lectura de insumos que falla con la ruta esperada y la etapa que la produce, sin módulo adaptador
 - [x] 4.2 Verificar que ningún módulo del paquete importa bibliotecas de entorno de cuaderno alojado
 - [x] 4.3 Verificar que `nest_asyncio` no figura en las dependencias declaradas ni se importa en ningún módulo
-- [ ] 4.4 Confirmar que las corrutinas se ejecutan con `asyncio.run()` y que la prueba de humo pasa sin parche de reentrada _(bloqueada: requiere `scoring.py`, grupo 6)_
+- [x] 4.4 Confirmar que las corrutinas se ejecutan con `asyncio.run()` y que la prueba de humo pasa sin parche de reentrada _(bloqueada: requiere `scoring.py`, grupo 6)_
 - [ ] 4.5 Confirmar que la etapa de graficación escribe el HTML a disco y reporta su ruta, sin intentar visualización incrustada _(bloqueada: requiere `viz.py`, grupo 10)_
 
 ## 5. Traslado de las etapas de preparación
@@ -44,24 +44,30 @@
 - [x] 5.10 Regenerar el consolidado y verificar: 2,631 filas, 2,631 llaves únicas, 2,577 reales y 54 sintéticas, sin duplicados
 - [x] 5.11 Verificar que el checkpoint recuperable sigue emparejando sus 2,562 tuits y que el piloto de referencia reproduce 60/60
 - [x] 5.12 Verificar que regenerar el consolidado produce llaves sintéticas idénticas, para que no invalide un checkpoint previo
-- [ ] 5.6 Trasladar a `traduccion.py` el esquema, la instrucción y el motor de traducción reanudable, conservando sin cambios el rodeo por hilo del cliente síncrono
+- [x] 5.6 Trasladar a `traduccion.py` el esquema, la instrucción y el motor de traducción reanudable, conservando sin cambios el rodeo por hilo del cliente síncrono
 - [x] 5.7 Verificar que la reparación y la traducción se saltan solas cuando sus salidas ya existen, sin recalcular ni gastar
 
 ## 6. Traslado del motor de corrida, sin arreglos todavía
 
-- [ ] 6.1 Trasladar a `scoring.py` la plantilla de instrucción por criterio, la construcción de los N agentes y la verificación de aislamiento entre criterios
-- [ ] 6.2 Trasladar la validación de nivel y la derivación determinista del puntaje desde la rúbrica
-- [ ] 6.3 Trasladar la estimación de costo y la compuerta de confirmación de gasto
-- [ ] 6.4 Trasladar el motor de corrida con su comportamiento actual intacto, para poder contrastar el traslado por separado de los arreglos
-- [ ] 6.5 Verificar que `evaluar_payload` y las demás dependencias entre módulos se resuelven al importar, y que un símbolo mal nombrado impide el arranque
+- [x] 6.1 Trasladar a `scoring.py` la plantilla de instrucción por criterio, la construcción de los N agentes y la verificación de aislamiento entre criterios
+- [x] 6.2 Trasladar la validación de nivel y la derivación determinista del puntaje desde la rúbrica
+- [x] 6.3 Trasladar la estimación de costo y la compuerta de confirmación de gasto
+- [x] 6.4 Trasladar el motor de corrida con su comportamiento actual intacto, para poder contrastar el traslado por separado de los arreglos
+- [x] 6.5 Verificar que `evaluar_payload` y las demás dependencias entre módulos se resuelven al importar, y que un símbolo mal nombrado impide el arranque
 
 ## 7. Piloto de fidelidad del traslado
 
-- [ ] 7.1 Ejecutar el piloto sobre los 60 tuits exactos de `checkpoint_piloto.jsonl`, seleccionados por lista explícita de identificadores y no por semilla: el corpus creció de 2,562 a 2,631 filas y la misma semilla ya sólo reproduce 1 de los 60
-- [ ] 7.2 Comparar par a par contra `checkpoint_piloto.jsonl` sobre los 3 criterios comunes y documentar cualquier divergencia antes de continuar (el cuarto criterio, saliencia de violencia, no existía en el piloto original y no es comparable)
-- [ ] 7.3 Confirmar que el traslado no alteró la distribución de estados ni el contenido de las justificaciones más allá de la variación esperada del modelo
+- [x] 7.1 Ejecutar el piloto sobre los 60 tuits exactos de `checkpoint_piloto.jsonl`, seleccionados por lista explícita de identificadores y no por semilla: el corpus creció de 2,562 a 2,631 filas y la misma semilla ya sólo reproduce 1 de los 60
+- [x] 7.2 Comparar par a par contra `checkpoint_piloto.jsonl` sobre los 3 criterios comunes y documentar cualquier divergencia antes de continuar (el cuarto criterio, saliencia de violencia, no existía en el piloto original y no es comparable)
+- [x] 7.3 Confirmar que el traslado no alteró la distribución de estados ni el contenido de las justificaciones más allá de la variación esperada del modelo
 
 ## 8. Fiabilidad del motor de corrida
+
+Medición de referencia del piloto de fidelidad, antes de los arreglos:
+240 llamadas en **18.3 min** contra ~1 min estimado, con la tasa cayendo de
+6.0/s a 0.2/s al final; y 1 `SIN_RESPUESTA` cementado. Los arreglos de este
+grupo deben corregir ambas cosas.
+
 
 - [ ] 8.1 Implementar la clasificación de fallos entre permanentes y transitorios, con los errores de programación como permanentes
 - [ ] 8.2 Implementar el aborto inmediato ante fallo estructural, propagando el diagnóstico original con su traza y sin escribir registros de fallo para las filas restantes
