@@ -32,7 +32,7 @@ from pydantic import BaseModel, Field
 
 from .adk import (LlmAgent, ParallelAgent, config_generacion, construir_modelo,
                   ejecutar_agente)
-from .config import Config
+from .config import (Config, ESTADOS_RESULTADO, estados_a_conservar)
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -302,16 +302,27 @@ def estimar_costo(cfg: Config, sub: pd.DataFrame, criterios: list[dict],
 #  Checkpoint
 # ──────────────────────────────────────────────────────────────────────────
 
-def claves_completadas(ruta: Path) -> set[tuple[str, str]]:
-    """Combinaciones (tweet_id, slug) ya presentes en el checkpoint.
+def claves_completadas(ruta: Path, alcance: str = "fallidos") -> set[tuple[str, str]]:
+    """Pares (tweet_id, slug) que NO hay que recalificar bajo este alcance.
 
-    DEFECTO TRASLADADO (tarea 9.3): no filtra por estado, así que un registro
-    de fallo cuenta como trabajo terminado y reanudar lo salta para siempre.
-    Es lo que dejó 2,540 pares congelados tras la corrida del NameError.
+    Filtra por estado, que es la corrección central. El cuaderno añadía todo
+    registro presente, así que un fallo contaba como trabajo terminado y
+    reanudar lo saltaba para siempre: es lo que dejó 2,540 pares congelados
+    tras la corrida del NameError, irreparables por reejecución.
+
+    NO_APLICABLE sí es un resultado terminado —es el modelo respondiendo que
+    el criterio no aplica, no un fallo— y confundirlo con error dispararía la
+    recalificación del 74% del corpus sin motivo.
+
+    Cada par se resuelve por su registro VÁLIDO más reciente; si no tiene
+    ninguno, por el último escrito.
     """
-    if not ruta.exists():
+    conservar = estados_a_conservar(alcance)
+    if not conservar or not ruta.exists():
         return set()
-    hechas = set()
+
+    ultimo: dict[tuple[str, str], str] = {}
+    ultimo_bueno: dict[tuple[str, str], str] = {}
     with ruta.open(encoding="utf-8") as fh:
         for linea in fh:
             linea = linea.strip()
@@ -319,10 +330,15 @@ def claves_completadas(ruta: Path) -> set[tuple[str, str]]:
                 continue
             try:
                 r = json.loads(linea)
-                hechas.add((str(r["tweet_id"]), r["slug"]))
             except Exception:
                 continue   # línea truncada por una interrupción
-    return hechas
+            k = (str(r["tweet_id"]), r["slug"])
+            estado = r.get("estado")
+            ultimo[k] = estado
+            if estado in ESTADOS_RESULTADO:
+                ultimo_bueno[k] = estado
+
+    return {k for k in ultimo if ultimo_bueno.get(k, ultimo[k]) in conservar}
 
 
 class Escritor:
@@ -365,11 +381,55 @@ class Escritor:
         return False
 
 
+class FalloEstructural(RuntimeError):
+    """Error de programación o de configuración: afecta a TODAS las filas por
+    igual, así que la corrida no puede continuar.
+
+    Existe por la corrida del NameError. ``name 'evaluar_payload' is not
+    defined`` se clasificaba como 'ERROR', indistinguible de un fallo de red,
+    se reintentaba cinco veces con retroceso exponencial —30 s por fila,
+    ~4 h en total dormidas en vano— y se escribía al checkpoint como fallo
+    permanente. 15,384 registros así.
+    """
+
+
+class ResultadoParcial(RuntimeError):
+    """El conjunto de agentes devolvió menos criterios de los pedidos."""
+
+    def __init__(self, faltantes: list[str]) -> None:
+        self.faltantes = faltantes
+        super().__init__(
+            f"el equipo no devolvió estado para {len(faltantes)} criterio(s): "
+            + ", ".join(faltantes)
+        )
+
+
+#: Errores que no pueden depender del dato en esta ruta de código. Si ocurren,
+#: ocurren para todas las filas.
+_ESTRUCTURALES = (NameError, ImportError, AttributeError, TypeError, SyntaxError)
+
+_SENAS_CREDENCIAL = (
+    "no api key", "api key not valid", "api_key_invalid",
+    "permission_denied", "unauthenticated", "invalid authentication",
+)
+
+
+def es_estructural(exc: Exception) -> bool:
+    """Distingue lo que jamás se va a resolver de lo que puede resolverse solo."""
+    if isinstance(exc, FalloEstructural):
+        return True
+    if isinstance(exc, _ESTRUCTURALES):
+        return True
+    return any(s in str(exc).lower() for s in _SENAS_CREDENCIAL)
+
+
 def motivo_fallo(exc: Exception) -> str:
-    """DEFECTO TRASLADADO (tarea 8.1): no distingue lo permanente de lo
-    transitorio. Un NameError cae en 'ERROR', igual que un fallo de red, y se
-    reintenta cinco veces con retroceso exponencial algo que jamás va a
-    resolverse."""
+    """Clasifica un fallo para el registro del checkpoint.
+
+    'PERMANENTE' y 'BLOQUEADO' no se reintentan; el resto sí.
+    """
+    if es_estructural(exc):
+        return "PERMANENTE"
     t = str(exc).lower()
     if any(k in t for k in ("safety", "blocked", "prohibited", "recitation")):
         return "BLOQUEADO"     # filtro de contenido: NO es nivel bajo ni no-aplicable
@@ -377,6 +437,10 @@ def motivo_fallo(exc: Exception) -> str:
         return "LIMITE_TASA"
     if any(k in t for k in ("500", "502", "503", "504", "unavailable", "internal")):
         return "ERROR_SERVIDOR"
+    if isinstance(exc, (asyncio.TimeoutError, TimeoutError)):
+        return "TIEMPO_AGOTADO"
+    if isinstance(exc, ResultadoParcial):
+        return "SIN_RESPUESTA"
     return "ERROR"
 
 
@@ -386,37 +450,51 @@ def motivo_fallo(exc: Exception) -> str:
 
 async def _evaluar_fila(cfg: Config, validador: Validador, runner, fila,
                         pendientes: list[str], sem) -> list[dict]:
+    """Califica una fila contra sus criterios pendientes.
+
+    Lanza :class:`FalloEstructural` si el error afecta a todas las filas: quien
+    llame debe abortar la corrida en vez de seguir escribiendo fallos.
+    """
     tweet_id = str(fila[cfg.col_id])
     async with sem:
-        ultimo = None
+        ultimo: Exception | None = None
         for intento in range(1, cfg.max_intentos + 1):
             try:
                 claves = [f"cal_{s}" for s in pendientes]
-                estado = await evaluar_payload(runner, fila["_payload"], claves)
+                estado = await asyncio.wait_for(
+                    evaluar_payload(runner, fila["_payload"], claves),
+                    timeout=cfg.timeout_llamada,
+                )
+
+                # Un resultado parcial es un FALLO REINTENTABLE, no un
+                # resultado. El cuaderno materializaba aquí los registros
+                # SIN_RESPUESTA y retornaba; al no lanzar excepción, el bucle
+                # de reintentos nunca se activaba y el hueco se escribía como
+                # definitivo. El piloto lo reprodujo: 1 de 240.
+                faltantes = [s for s in pendientes if f"cal_{s}" not in estado]
+                if faltantes:
+                    raise ResultadoParcial(faltantes)
+
                 salida = []
                 for slug in pendientes:
-                    k = f"cal_{slug}"
-                    if k in estado:
-                        reg = validador.validar(slug, estado[k])
-                    else:
-                        # DEFECTO TRASLADADO (tarea 8.5): el resultado parcial
-                        # se materializa y se RETORNA. Al no lanzar excepción,
-                        # el bucle de reintentos de arriba nunca se activa y el
-                        # hueco se escribe como definitivo.
-                        reg = {"slug": slug, "aplicable": False, "nivel": None,
-                               "puntaje": None, "justificacion": "",
-                               "estado": "SIN_RESPUESTA",
-                               "detalle": "el agente no devolvió estado"}
+                    reg = validador.validar(slug, estado[f"cal_{slug}"])
                     reg["tweet_id"] = tweet_id
                     reg["contexto_incompleto"] = fila["contexto_incompleto"]
                     salida.append(reg)
                 return salida
+
             except Exception as exc:
+                # Un fallo estructural afecta a todas las filas por igual:
+                # reintentarlo es tiempo perdido y registrarlo es dato falso.
+                if es_estructural(exc):
+                    raise FalloEstructural(
+                        f"fallo estructural al evaluar el tuit {tweet_id}: "
+                        f"{type(exc).__name__}: {exc}"
+                    ) from exc
                 ultimo = exc
-                motivo = motivo_fallo(exc)
-                if motivo == "BLOQUEADO" or intento == cfg.max_intentos:
+                if motivo_fallo(exc) == "BLOQUEADO" or intento == cfg.max_intentos:
                     break
-                await asyncio.sleep(min(2 ** intento, 30))   # retroceso exponencial
+                await asyncio.sleep(min(2 ** intento, cfg.retraso_maximo))
 
         motivo = motivo_fallo(ultimo)
         return [{"tweet_id": tweet_id, "slug": slug, "aplicable": False, "nivel": None,
@@ -427,7 +505,8 @@ async def _evaluar_fila(cfg: Config, validador: Validador, runner, fila,
 
 
 async def correr(cfg: Config, sub: pd.DataFrame, criterios: list[dict],
-                 ruta: Path | None = None, equipo=None, escribir=print) -> dict:
+                 ruta: Path | None = None, equipo=None, alcance: str | None = None,
+                 escribir=print) -> dict:
     """`equipo` permite correr con un ParallelAgent distinto (p.ej. otro modelo
     en la calibración) sin mutar el equipo de producción."""
     ruta = ruta or cfg.checkpoint
@@ -437,7 +516,8 @@ async def correr(cfg: Config, sub: pd.DataFrame, criterios: list[dict],
         equipo, _ = construir_equipo(cfg, criterios)
         verificar_aislamiento(equipo, criterios)
 
-    hechas = claves_completadas(ruta)
+    alcance = alcance or cfg.alcance_recalificacion
+    hechas = claves_completadas(ruta, alcance)
     todos_slugs = [c["slug"] for c in criterios]
 
     trabajo = []
@@ -449,20 +529,33 @@ async def correr(cfg: Config, sub: pd.DataFrame, criterios: list[dict],
 
     total_pendiente = sum(len(p) for _, p in trabajo)
     reusados = len(sub) * n_criterios - total_pendiente
-    escribir(f"Checkpoint '{ruta.name}': {reusados:,} resultados reutilizados")
+    escribir(f"Checkpoint '{ruta.name}': {reusados:,} resultados reutilizados "
+             f"(alcance «{alcance}»)")
     escribir(f"Pendientes: {total_pendiente:,} llamadas en {len(trabajo):,} filas")
 
     if not trabajo:
         escribir("✅ Nada pendiente: el checkpoint ya cubre todo el subconjunto.")
-        return {"ok": 0, "fallidas": 0, "reusados": reusados}
+        return {"ok": 0, "fallidas": 0, "reusados": reusados, "abortada": False}
 
-    # DEFECTO TRASLADADO (tarea 8.7): el semáforo cuenta FILAS. Cada fila
-    # abanica un agente por criterio, así que las peticiones en vuelo son
-    # concurrencia × n_criterios — con 4 criterios, 8 filas son 32 peticiones
-    # simultáneas y nada lo declara.
-    sem = asyncio.Semaphore(cfg.concurrencia)
+    # El semáforo cuenta LLAMADAS. Las filas en vuelo se derivan del límite de
+    # llamadas y del número de criterios, porque cada fila abanica un agente
+    # por criterio: el cuaderno limitaba filas, así que 8 filas con 4 criterios
+    # eran 32 peticiones simultáneas sin que nada lo declarara.
+    filas_vuelo = cfg.filas_en_vuelo(n_criterios)
+    escribir(f"Concurrencia: {cfg.llamadas_simultaneas} llamadas simultáneas ÷ "
+             f"{n_criterios} criterios = {filas_vuelo} filas en vuelo "
+             f"({filas_vuelo * n_criterios} peticiones)")
+    if n_criterios > cfg.llamadas_simultaneas:
+        escribir(f"   ⚠️  la rúbrica tiene más criterios ({n_criterios}) que el límite "
+                 f"de llamadas ({cfg.llamadas_simultaneas}): se procesa una fila a la "
+                 f"vez y el abanico supera el límite configurado")
+
+    sem = asyncio.Semaphore(filas_vuelo)
     ok = fallidas = 0
+    seguidas = 0            # fallos consecutivos, para el cortacircuitos
+    abortada = None
     t0 = time.time()
+    ultimo_reporte = t0
 
     with Escritor() as escritor:
         # Reciclado del runner por bloques: evita acumular sesiones en corridas largas
@@ -470,27 +563,71 @@ async def correr(cfg: Config, sub: pd.DataFrame, criterios: list[dict],
             bloque = trabajo[ini:ini + cfg.reciclar_cada]
             runner = InMemoryRunner(agent=equipo, app_name=f"run_{ini}")
 
-            tareas = [_evaluar_fila(cfg, validador, runner, f, p, sem) for f, p in bloque]
-            for fut in asyncio.as_completed(tareas):
-                registros = await fut
-                escritor.anexar(registros, ruta)
-                ok += sum(r["estado"] in ("OK", "NO_APLICABLE") for r in registros)
-                fallidas += sum(r["estado"] not in ("OK", "NO_APLICABLE") for r in registros)
+            tareas = [asyncio.ensure_future(
+                          _evaluar_fila(cfg, validador, runner, f, p, sem))
+                      for f, p in bloque]
+            try:
+                for fut in asyncio.as_completed(tareas):
+                    registros = await fut
+                    escritor.anexar(registros, ruta)
+                    buenas = sum(r["estado"] in ESTADOS_RESULTADO for r in registros)
+                    malas = len(registros) - buenas
+                    ok += buenas
+                    fallidas += malas
 
-                hechas_n = ok + fallidas
-                if hechas_n % 50 == 0 or hechas_n == total_pendiente:
-                    tasa = hechas_n / max(time.time() - t0, 1e-9)
-                    rest = (total_pendiente - hechas_n) / max(tasa, 1e-9)
-                    escribir(f"  {hechas_n:,} listas · {fallidas:,} fallidas · "
-                             f"{tasa:.1f}/s · faltan ~{rest / 60:.0f} min")
+                    # Cortacircuitos: una racha larga de fallos nunca es mala
+                    # suerte. En la corrida del NameError, 3,846 filas fallaron
+                    # idénticamente una tras otra durante horas y nada paró.
+                    seguidas = seguidas + 1 if (malas and not buenas) else 0
+                    if seguidas >= cfg.fallos_consecutivos_max:
+                        abortada = (
+                            f"{seguidas} filas consecutivas fallidas "
+                            f"(umbral {cfg.fallos_consecutivos_max}). "
+                            f"Último motivo: {registros[0].get('estado')} — "
+                            f"{str(registros[0].get('detalle'))[:160]}"
+                        )
+                        break
+
+                    hechas_n = ok + fallidas
+                    ahora = time.time()
+                    # Avance por conteo Y por tiempo: durante una racha de
+                    # reintentos el conteo no avanza, y sin el reporte temporal
+                    # no hay forma de distinguir trabajo de cuelgue.
+                    if (hechas_n % 50 == 0 or hechas_n == total_pendiente
+                            or ahora - ultimo_reporte >= 30):
+                        ultimo_reporte = ahora
+                        tasa = hechas_n / max(ahora - t0, 1e-9)
+                        rest = (total_pendiente - hechas_n) / max(tasa, 1e-9)
+                        escribir(f"  {hechas_n:,}/{total_pendiente:,} · {fallidas:,} fallidas · "
+                                 f"{tasa:.1f}/s · faltan ~{rest / 60:.0f} min")
+            except FalloEstructural as exc:
+                # No se escribe ningún registro de fallo: un error de
+                # programación o de credencial no es dato sobre los tuits.
+                escribir(f"\n⛔ ABORTADA · fallo estructural\n   {exc}")
+                escribir(f"   {ok:,} resultados escritos antes del aborto quedan íntegros "
+                         f"y la reanudación continúa desde ahí.")
+                raise
+            finally:
+                for tarea in tareas:
+                    if not tarea.done():
+                        tarea.cancel()
 
             del runner   # libera las sesiones del bloque
+            if abortada:
+                break
 
-    escribir(f"\n✅ Corrida terminada en {(time.time() - t0) / 60:.1f} min")
+    minutos = (time.time() - t0) / 60
+    if abortada:
+        escribir(f"\n⛔ ABORTADA por cortacircuitos tras {minutos:.1f} min")
+        escribir(f"   {abortada}")
+        escribir(f"   {ok:,} resultados escritos quedan íntegros; reanudar continúa desde ahí.")
+    else:
+        escribir(f"\n✅ Corrida terminada en {minutos:.1f} min")
     escribir(f"   {ok:,} calificaciones · {fallidas:,} fallidas · {reusados:,} reutilizadas")
     if fallidas:
-        escribir("   ⚠️  revisa los estados != OK para ver los motivos")
-    return {"ok": ok, "fallidas": fallidas, "reusados": reusados}
+        escribir("   ⚠️  los fallos se recalifican solos al reanudar con alcance «fallidos»")
+    return {"ok": ok, "fallidas": fallidas, "reusados": reusados,
+            "abortada": bool(abortada), "motivo_aborto": abortada}
 
 
 def cargar_resultados(ruta: Path) -> pd.DataFrame:
@@ -514,4 +651,13 @@ def cargar_resultados(ruta: Path) -> pd.DataFrame:
                 except Exception:
                     continue
     df = pd.DataFrame(filas)
-    return df.drop_duplicates(subset=["tweet_id", "slug"], keep="last")
+    if df.empty:
+        return df
+    # Gana el último registro VÁLIDO del par; si no tiene ninguno, el último
+    # escrito, para que su diagnóstico quede disponible. Con la reanudación
+    # filtrada la secuencia ERROR → OK se vuelve común, así que la regla no
+    # puede ser "el último" a secas.
+    df["_valido"] = df["estado"].isin(ESTADOS_RESULTADO)
+    df = df.sort_values("_valido", kind="stable")
+    df = df.drop_duplicates(subset=["tweet_id", "slug"], keep="last")
+    return df.drop(columns="_valido")

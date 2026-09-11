@@ -18,23 +18,27 @@ from .config import Config
 
 
 def opciones_reintento(cfg: Config) -> types.HttpRetryOptions:
-    """Política de reintento del cliente HTTP.
+    """Política de reintento del cliente HTTP: acotada y desincronizada.
 
-    ADVERTENCIA — traslado literal del cuaderno, defectuoso a propósito:
-    ``exp_base=7`` sin ``max_delay`` produce esperas de 1 s → 7 s → 49 s →
-    **343 s**. Casi seis minutos de silencio son indistinguibles de un cuelgue,
-    y anidados bajo el reintento externo el peor caso por fila ronda los 34
-    minutos. Verificado en google-genai 1.66.0: ``max_delay`` por defecto es
-    ``None``, es decir sin tope.
+    El cuaderno usaba ``exp_base=7`` sin ``max_delay``, lo que produce esperas
+    de 1 s → 7 s → 49 s → **343 s**. Verificado en google-genai 1.66.0:
+    ``max_delay`` por defecto es ``None``, es decir sin tope. Casi seis minutos
+    de silencio son indistinguibles de un cuelgue, y anidados bajo el reintento
+    externo el peor caso por fila ronda los 34 minutos.
 
-    Se conserva así para que el piloto de fidelidad del grupo 7 compare
-    traslado contra traslado. La tarea 8.10 lo cambia a base 2 con tope y
-    ruido.
+    Medido en el piloto de fidelidad antes de este cambio: 240 llamadas en
+    18.3 min contra ~1 min estimado, con la tasa cayendo de 6.0/s a 0.2/s.
+
+    Base 2 con tope da 1 s → 2 s → 4 s → 8 s, y el ruido evita que las
+    llamadas en vuelo reintenten todas en el mismo instante y vuelvan a topar
+    el límite a la vez.
     """
     return types.HttpRetryOptions(
         attempts=cfg.max_intentos,
-        exp_base=7,
+        exp_base=2,
         initial_delay=1,
+        max_delay=cfg.retraso_maximo,
+        jitter=cfg.ruido_reintento,
         http_status_codes=[429, 500, 502, 503, 504],
     )
 

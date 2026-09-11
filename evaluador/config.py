@@ -211,9 +211,12 @@ class Config:
     justificacion_max_palabras: int
 
     # Corrida
-    concurrencia: int
+    llamadas_simultaneas: int
+    fallos_consecutivos_max: int
     reciclar_cada: int
     max_intentos: int
+    retraso_maximo: float
+    ruido_reintento: float
     timeout_llamada: float
     checkpoint: Path
     alcance_recalificacion: str         # "fallidos" | "sin-nivel" | "todo"
@@ -241,6 +244,16 @@ class Config:
     precios: dict[str, tuple[float, float]] = field(default_factory=dict)
     raiz: Path = Path(".")
 
+    def filas_en_vuelo(self, n_criterios: int) -> int:
+        """Filas simultáneas derivadas del límite de llamadas.
+
+        Cada fila dispara un agente por criterio a la vez, así que las
+        peticiones en vuelo son filas × n_criterios. Se deriva en vez de
+        configurarse para que el número declarado sea el que de verdad se
+        emite.
+        """
+        return max(1, self.llamadas_simultaneas // max(n_criterios, 1))
+
     @property
     def corpus_a_calificar(self) -> Path:
         """El traducido si existe; si no, el reparado. La traducción es de
@@ -264,7 +277,10 @@ class Config:
             f"perfil «{self.perfil}» · {self.descripcion}\n"
             f"  modelo       {self.modelo} · temp={self.temperatura} · razonamiento={razona}\n"
             f"  selección    muestra={muestra} · semilla={self.semilla}\n"
-            f"  corrida      concurrencia={self.concurrencia} · max_intentos={self.max_intentos}\n"
+            f"  corrida      llamadas simultáneas={self.llamadas_simultaneas} · "
+            f"max_intentos={self.max_intentos} · timeout={self.timeout_llamada:.0f}s\n"
+            f"  alcance      recalificar «{self.alcance_recalificacion}» · "
+            f"cortacircuitos={self.fallos_consecutivos_max} fallos seguidos\n"
             f"  corpus       {self.corpus_a_calificar}\n"
             f"  rúbrica      {self.rubrica_json}\n"
             f"  checkpoint   {self.checkpoint}\n"

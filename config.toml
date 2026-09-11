@@ -76,14 +76,29 @@ retraducir_existentes   = false
 justificacion_max_palabras = 90       # la salida domina el costo
 
 # ── Corrida ───────────────────────────────────────────────────────────────
-# NOTA: 'concurrencia' cuenta FILAS, no llamadas. Cada fila abanica un agente
-# por criterio, así que las peticiones en vuelo son concurrencia × n_criterios.
-# Con 4 criterios, 8 filas son 32 peticiones simultáneas. Este parámetro se
-# invierte en el grupo 8 del cambio migrar-a-proceso-local; aquí se conserva
-# con su semántica original para que el piloto de fidelidad sea comparable.
-concurrencia  = 8
+# Peticiones HTTP simultáneas al proveedor. Las filas en vuelo se DERIVAN:
+#     filas = max(1, llamadas_simultaneas // n_criterios)
+# El parámetro anterior contaba filas, y como cada fila abanica un agente por
+# criterio, 8 filas con 4 criterios eran 32 peticiones simultáneas sin que
+# nada lo declarara. Ahora el número que se escribe aquí es el que se emite.
+llamadas_simultaneas = 32
 reciclar_cada = 200                   # filas por runner, para no acumular sesiones
 max_intentos  = 5
+
+# Reintento del cliente HTTP. El cuaderno usaba base 7 sin tope, lo que da
+# esperas de 1 → 7 → 49 → 343 segundos: casi seis minutos de silencio que se
+# leen como un cuelgue. Medido en el piloto: 240 llamadas en 18.3 min contra
+# ~1 min estimado. Base 2 con tope da 1 → 2 → 4 → 8, y el ruido evita que las
+# llamadas en vuelo reintenten todas en el mismo instante.
+retraso_maximo  = 60                  # segundos, tope de una espera individual
+ruido_reintento = 0.3
+
+# Cortacircuitos: filas consecutivas fallidas que abortan la corrida.
+# Existe por la corrida del NameError: 3,846 filas fallaron idénticamente una
+# tras otra durante horas, y nada paró. Un fallo estructural afecta a todas
+# las filas por igual, así que una racha larga nunca es mala suerte.
+# Los fallos dispersos entre resultados buenos no lo disparan.
+fallos_consecutivos_max = 20
 
 # Tiempo límite por llamada, en segundos. Sin tope, una petición que nunca
 # responde retiene su cupo del semáforo indefinidamente: se observó una fila

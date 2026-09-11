@@ -69,32 +69,32 @@ Medición de referencia del piloto de fidelidad, antes de los arreglos:
 grupo deben corregir ambas cosas.
 
 
-- [ ] 8.1 Implementar la clasificación de fallos entre permanentes y transitorios, con los errores de programación como permanentes
-- [ ] 8.2 Implementar el aborto inmediato ante fallo estructural, propagando el diagnóstico original con su traza y sin escribir registros de fallo para las filas restantes
-- [ ] 8.3 Implementar el manejo de fallos dependientes del dato: se registran en su fila y la corrida continúa
-- [ ] 8.4 Implementar el cortacircuitos por fallos consecutivos con umbral configurable, reportando el umbral y los diagnósticos que lo dispararon
-- [ ] 8.5 Convertir el resultado parcial en excepción interna que nombre los criterios ausentes, de modo que entre al bucle de reintentos existente
-- [ ] 8.6 Materializar el estado de fallo por criterio ausente sólo tras agotar los reintentos
-- [ ] 8.7 Invertir el parámetro de concurrencia: configurar llamadas simultáneas y derivar las filas en vuelo como el cociente entero con el número de criterios, con mínimo de una
-- [ ] 8.8 Advertir cuando el número de criterios excede el límite de llamadas simultáneas configurado
-- [ ] 8.9 Reportar al inicio de cada corrida el límite de llamadas, el número de criterios y las filas en vuelo resultantes
-- [ ] 8.10 Reconfigurar el reintento HTTP con base 2, tope máximo de espera y componente aleatorio
-- [ ] 8.11 Emitir avance con periodicidad temporal además de por conteo, para distinguir una espera por reintentos de un proceso detenido
-- [ ] 8.12 Verificar que los resultados escritos antes de un aborto permanecen íntegros y permiten reanudar
-- [ ] 8.13 Probar el aborto estructural introduciendo deliberadamente un símbolo mal nombrado y confirmar que no se escriben registros de fallo
-- [ ] 8.14 Probar el cortacircuitos forzando una racha de fallos y confirmar que fallos dispersos no lo disparan
+- [x] 8.1 Implementar la clasificación de fallos entre permanentes y transitorios, con los errores de programación como permanentes
+- [x] 8.2 Implementar el aborto inmediato ante fallo estructural, propagando el diagnóstico original con su traza y sin escribir registros de fallo para las filas restantes
+- [x] 8.3 Implementar el manejo de fallos dependientes del dato: se registran en su fila y la corrida continúa
+- [x] 8.4 Implementar el cortacircuitos por fallos consecutivos con umbral configurable, reportando el umbral y los diagnósticos que lo dispararon
+- [x] 8.5 Convertir el resultado parcial en excepción interna que nombre los criterios ausentes, de modo que entre al bucle de reintentos existente
+- [x] 8.6 Materializar el estado de fallo por criterio ausente sólo tras agotar los reintentos
+- [x] 8.7 Invertir el parámetro de concurrencia: configurar llamadas simultáneas y derivar las filas en vuelo como el cociente entero con el número de criterios, con mínimo de una
+- [x] 8.8 Advertir cuando el número de criterios excede el límite de llamadas simultáneas configurado
+- [x] 8.9 Reportar al inicio de cada corrida el límite de llamadas, el número de criterios y las filas en vuelo resultantes
+- [x] 8.10 Reconfigurar el reintento HTTP con base 2, tope máximo de espera y componente aleatorio
+- [x] 8.11 Emitir avance con periodicidad temporal además de por conteo, para distinguir una espera por reintentos de un proceso detenido
+- [x] 8.12 Verificar que los resultados escritos antes de un aborto permanecen íntegros y permiten reanudar
+- [x] 8.13 Probar el aborto estructural introduciendo deliberadamente un símbolo mal nombrado y confirmar que no se escriben registros de fallo
+- [x] 8.14 Probar el cortacircuitos forzando una racha de fallos y confirmar que fallos dispersos no lo disparan
 
 ## 9. Recuperación de checkpoint
 
 - [ ] 9.1 Implementar la auditoría que reporta registros, pares distintos, desglose por estado, pares repetidos, estado final por par y diagnósticos predominantes, sin emitir llamadas
 - [ ] 9.2 Implementar el conteo y la omisión de líneas ilegibles en la auditoría
-- [ ] 9.3 Cambiar la reanudación para considerar completado únicamente el par cuyo registro vigente tenga estado de resultado, tratando la no aplicabilidad como resultado
-- [ ] 9.4 Cambiar la deduplicación en lectura a último resultado válido, con caída al último registro escrito cuando no haya ninguno válido
+- [x] 9.3 Cambiar la reanudación para considerar completado únicamente el par cuyo registro vigente tenga estado de resultado, tratando la no aplicabilidad como resultado
+- [x] 9.4 Cambiar la deduplicación en lectura a último resultado válido, con caída al último registro escrito cuando no haya ninguno válido
 - [ ] 9.5 Implementar la verificación de correspondencia de criterios entre checkpoint y rúbrica vigente, con rechazo de la reanudación ante discrepancia salvo bandera explícita
 - [ ] 9.6 Reportar antes de reanudar cuántos pares se recuperan, cuántos se recalifican y el costo estimado, exigiendo confirmación de gasto
-- [ ] 9.10 Implementar los tres alcances de recalificación: `fallidos` (defecto), `sin-nivel` y `todo`, con `todo` ignorando por completo los estados del checkpoint
+- [x] 9.10 Implementar los tres alcances de recalificación: `fallidos` (defecto), `sin-nivel` y `todo`, con `todo` ignorando por completo los estados del checkpoint
 - [ ] 9.11 Hacer que los alcances más amplios que `fallidos` reporten su conteo desglosado y adviertan que repiten gasto ya realizado antes de pedir confirmación
-- [ ] 9.12 Verificar que recalificar con cualquier alcance no borra registros previos y que la lectura sigue resolviendo cada par por su registro válido más reciente
+- [x] 9.12 Verificar que recalificar con cualquier alcance no borra registros previos y que la lectura sigue resolviendo cada par por su registro válido más reciente
 - [ ] 9.7 Incorporar `checkpoint (7).jsonl` al proyecto con un nombre estable y auditarlo
 - [ ] 9.8 Confirmar sobre la auditoría el reparto esperado de 7,708 pares recuperables y 2,540 a recalificar
 - [ ] 9.9 Verificar que una reanudación sobre pares ya resueltos no emite ninguna llamada
