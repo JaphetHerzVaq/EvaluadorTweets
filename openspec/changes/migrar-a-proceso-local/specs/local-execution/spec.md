@@ -103,3 +103,32 @@ El paquete SHALL ejecutarse íntegramente como proceso local. Ningún módulo MU
 
 - **WHEN** una etapa produce un artefacto de salida
 - **THEN** el artefacto queda escrito en la ruta configurada y el sistema reporta esa ruta, sin depender de ningún mecanismo de entrega propio de un entorno alojado
+
+### Requirement: Consolidación de fuentes adicionales con llave normalizada
+
+El sistema SHALL permitir unir al corpus base una fuente adicional de filas, resolviendo la llave de cada fila entrante por orden de preferencia: el identificador de la columna plana si es real, el que traiga su registro crudo si es real, y en último término una llave sintética derivada del contenido. Toda llave sintética MUST llevar un prefijo que la distinga de un identificador real, MUST ser determinista para que regenerar el consolidado no invalide un checkpoint previo, y el sistema MUST rechazar el consolidado si alguna llave queda duplicada.
+
+#### Scenario: Identificador destruido por una hoja de cálculo pero presente en el registro crudo
+
+- **WHEN** una fila entrante trae el identificador en notación científica y su registro crudo contiene el identificador completo
+- **THEN** el sistema usa el del registro crudo y reporta cuántas filas se resolvieron por esa vía
+
+#### Scenario: Fila que nunca tuvo identificador de origen
+
+- **WHEN** una fila entrante no tiene identificador real ni en la columna plana ni en su registro crudo
+- **THEN** el sistema le asigna una llave sintética con prefijo distintivo, derivada de su contenido, y reporta cuántas se asignaron
+
+#### Scenario: Regeneración del consolidado
+
+- **WHEN** se regenera el consolidado a partir de las mismas fuentes
+- **THEN** las llaves sintéticas resultantes son idénticas a las de la generación anterior, de modo que un checkpoint previo sigue emparejando
+
+#### Scenario: Llaves duplicadas
+
+- **WHEN** la unión produce dos filas con la misma llave
+- **THEN** el sistema rechaza el consolidado y no escribe el archivo, porque filas que comparten llave se sobrescribirían entre sí en el checkpoint
+
+#### Scenario: Filas ya presentes en la base
+
+- **WHEN** una fila entrante tiene una llave que ya existe en el corpus base
+- **THEN** se omite y se conserva la de la base, para no perder calificaciones ya pagadas

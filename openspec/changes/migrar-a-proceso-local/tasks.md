@@ -39,8 +39,11 @@
 - [x] 5.3 Regenerar `rubrica.json` desde el PDF vigente y verificar que produce los cuatro criterios: tres ordinales 0–5 y el binario 0/1 de saliencia de violencia
 - [x] 5.4 Verificar que los slugs del `rubrica.json` regenerado coinciden con los presentes en el checkpoint a recuperar
 - [x] 5.5 Trasladar a `corpus.py` la reparación desde `raw_json`, la carga de CSV y Excel, la selección de subconjunto, la detección de contexto incompleto y la construcción del payload
-- [ ] 5.8 Reincorporar el complemento reexportado con los identificadores intactos y verificar que las 69 filas quedan con id de 19 dígitos _(bloqueada: espera el archivo del usuario)_
-- [ ] 5.9 Excluir de toda corrida las filas cuyo identificador no tenga 19 dígitos, para que no se sobrescriban entre sí en el checkpoint
+- [x] 5.8 Resuelto de otra forma: el complemento reexportado sigue sin identificadores porque 54 de sus filas nunca vinieron de la API (`origen=corpus_local`, `author_id=csv:*`, `raw_json` vacío). No hay id que recuperar
+- [x] 5.9 Implementar `consolidar()` con resolución de llave en tres pasos y llave sintética determinista con prefijo `local:` para las filas sin identificador de origen
+- [x] 5.10 Regenerar el consolidado y verificar: 2,631 filas, 2,631 llaves únicas, 2,577 reales y 54 sintéticas, sin duplicados
+- [x] 5.11 Verificar que el checkpoint recuperable sigue emparejando sus 2,562 tuits y que el piloto de referencia reproduce 60/60
+- [x] 5.12 Verificar que regenerar el consolidado produce llaves sintéticas idénticas, para que no invalide un checkpoint previo
 - [ ] 5.6 Trasladar a `traduccion.py` el esquema, la instrucción y el motor de traducción reanudable, conservando sin cambios el rodeo por hilo del cliente síncrono
 - [x] 5.7 Verificar que la reparación y la traducción se saltan solas cuando sus salidas ya existen, sin recalcular ni gastar
 

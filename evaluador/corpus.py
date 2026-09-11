@@ -295,6 +295,146 @@ def reparar(cfg: Config, forzar: bool | None = None, escribir=print) -> pd.DataF
 
 
 # ──────────────────────────────────────────────────────────────────────────
+#  Consolidación de fuentes adicionales
+# ──────────────────────────────────────────────────────────────────────────
+
+PREFIJO_SINTETICO = "local:"
+LARGO_ID_REAL = 19
+
+
+def es_id_real(valor: str) -> bool:
+    """Un identificador de tuit es una cadena de 19 dígitos."""
+    s = str(valor or "").strip()
+    return len(s) == LARGO_ID_REAL and s.isdigit()
+
+
+def id_sintetico(fila, cfg: Config) -> str:
+    """Llave estable para filas que nunca tuvieron identificador de la API.
+
+    Parte del corpus no viene de Twitter: son filas armadas desde una hoja de
+    cálculo o un corpus local, reconocibles por ``origen`` y por un
+    ``author_id`` con prefijo ``csv:``. Su ``raw_json`` está vacío, así que no
+    hay respuesta de API de donde recuperar un identificador — nunca existió.
+
+    Se deriva del contenido para que sea determinista: regenerar el
+    consolidado produce las mismas llaves, y por tanto un checkpoint previo
+    sigue emparejando. El prefijo hace imposible confundirla con un id real.
+    """
+    import hashlib
+
+    semilla = "\x1f".join([
+        str(fila.get("author_username") or ""),
+        str(fila.get("created_at") or ""),
+        str(fila.get(cfg.col_texto) or ""),
+    ])
+    h = hashlib.blake2s(semilla.encode("utf-8"), digest_size=8).hexdigest()
+    return f"{PREFIJO_SINTETICO}{h}"
+
+
+def consolidar(cfg: Config, base: Path, extra: Path, destino: Path,
+               escribir=print) -> pd.DataFrame:
+    """Une el corpus base con una fuente adicional, normalizando llaves.
+
+    Las filas de la fuente adicional se resuelven en este orden:
+      1. el ``id`` de la columna plana, si es un identificador real
+      2. el ``id`` que traiga su ``raw_json``, si es real
+      3. una llave sintética derivada del contenido
+
+    El paso 2 importa porque las exportaciones que pasan por una hoja de
+    cálculo convierten los 19 dígitos a notación científica (``2.06E+18``) y
+    colapsan miles de tuits distintos en un puñado de cadenas. ``raw_json``
+    sobrevive a esa conversión cuando existe.
+    """
+    exigir_insumo(base, "el corpus base consolidado", "reparar y traducir")
+    exigir_insumo(extra, "la fuente adicional a consolidar", "ninguna: es una entrada")
+
+    df_base = pd.read_csv(base, low_memory=False, encoding="utf-8-sig", **LECTURA)
+    df_extra = pd.read_csv(extra, low_memory=False, encoding="utf-8-sig", **LECTURA)
+    escribir(f"base  '{base.name}'  {len(df_base):,} filas × {len(df_base.columns)} columnas")
+    escribir(f"extra '{extra.name}' {len(df_extra):,} filas × {len(df_extra.columns)} columnas")
+
+    faltan = set(df_base.columns) - set(df_extra.columns)
+    sobran = set(df_extra.columns) - set(df_base.columns)
+    if faltan or sobran:
+        escribir(f"   ⚠️  columnas distintas · sólo en base: {sorted(faltan)} · "
+                 f"sólo en extra: {sorted(sobran)}")
+
+    # ── Resolver la llave de cada fila adicional ─────────────────────────
+    resueltos, desde_json, sinteticos = [], 0, 0
+    for _, fila in df_extra.iterrows():
+        plano = str(fila.get(cfg.col_id) or "").strip()
+        if es_id_real(plano):
+            resueltos.append(plano)
+            continue
+        crudo = str(fila.get("raw_json") or "").strip()
+        recuperado = ""
+        if crudo.startswith("{"):
+            try:
+                recuperado = str(json.loads(crudo).get("id") or "").strip()
+            except Exception:
+                recuperado = ""
+        if es_id_real(recuperado):
+            resueltos.append(recuperado)
+            desde_json += 1
+        else:
+            resueltos.append(id_sintetico(fila, cfg))
+            sinteticos += 1
+
+    df_extra = df_extra.copy()
+    df_extra[cfg.col_id] = resueltos
+
+    escribir(f"\n  llaves de la fuente adicional:")
+    escribir(f"    reales en la columna plana   {len(df_extra) - desde_json - sinteticos:>4}")
+    escribir(f"    recuperadas de raw_json      {desde_json:>4}")
+    escribir(f"    sintéticas ('{PREFIJO_SINTETICO}…')        {sinteticos:>4}")
+
+    if sinteticos:
+        colisiones = len(df_extra) - df_extra[cfg.col_id].nunique()
+        if colisiones:
+            raise RuntimeError(
+                f"{colisiones} llaves sintéticas colisionan: hay filas con el mismo "
+                f"autor, fecha y texto. Revisa duplicados en '{extra.name}'."
+            )
+
+    # ── Unir sin pisar lo ya calificado ──────────────────────────────────
+    ya = set(df_base[cfg.col_id])
+    nuevas = df_extra[~df_extra[cfg.col_id].isin(ya)]
+    repetidas = len(df_extra) - len(nuevas)
+    if repetidas:
+        escribir(f"    ya presentes en la base      {repetidas:>4}  (se omiten)")
+
+    salida = pd.concat([df_base, nuevas], ignore_index=True)
+    salida = salida.reindex(columns=list(df_base.columns))
+    salida = salida.fillna("")
+
+    # ── Integridad ───────────────────────────────────────────────────────
+    dup = salida[cfg.col_id].duplicated().sum()
+    reales = salida[cfg.col_id].map(es_id_real).sum()
+    sint = salida[cfg.col_id].astype(str).str.startswith(PREFIJO_SINTETICO).sum()
+    escribir(f"\n  consolidado: {len(salida):,} filas")
+    escribir(f"    con id real de {LARGO_ID_REAL} dígitos   {reales:>6,}")
+    escribir(f"    con llave sintética          {sint:>6,}")
+    escribir(f"    identificadores duplicados   {dup:>6,}")
+    if dup:
+        raise RuntimeError(
+            f"{dup} identificadores duplicados en el consolidado. Cada fila debe "
+            f"tener llave única o el checkpoint las sobrescribiría entre sí."
+        )
+    if reales + sint != len(salida):
+        otras = salida[~salida[cfg.col_id].map(es_id_real)
+                       & ~salida[cfg.col_id].astype(str).str.startswith(PREFIJO_SINTETICO)]
+        raise RuntimeError(
+            f"{len(otras)} filas tienen una llave que no es real ni sintética: "
+            f"{sorted(set(otras[cfg.col_id]))[:5]}"
+        )
+
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    salida.to_csv(destino, index=False, encoding="utf-8-sig")
+    escribir(f"\n✅ '{destino.name}'  ({destino.stat().st_size / 1e6:.1f} MB)")
+    return salida
+
+
+# ──────────────────────────────────────────────────────────────────────────
 #  Carga
 # ──────────────────────────────────────────────────────────────────────────
 
