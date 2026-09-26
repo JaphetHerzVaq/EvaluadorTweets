@@ -253,6 +253,38 @@ def resolver_niveles_ausencia(cfg: Config, criterios: list[dict]) -> dict[str, s
     return mapa
 
 
+def etiqueta_criterio(criterio: dict) -> str:
+    """Nombre corto del criterio, para leyendas y ejes.
+
+    Las gráficas usaban el identificador de la rúbrica —«RÚBRICA 1», «RÚBRICA
+    2»— que no dice nada: para leer una serie hay que recordar qué mide cada
+    número. El nombre completo tampoco sirve, porque no cabe en una leyenda.
+
+    Se deriva del propio nombre del criterio, no de una lista escrita a mano,
+    para que siga funcionando si la rúbrica cambia:
+
+        "ATMÓSFERA DE MÉXICO: DIMENSIÓN SIMPÁTICA / EMOCIONAL"  → "Atmósfera"
+        "IMAGEN CULTURAL DE MÉXICO: DIMENSIÓN ESTÉTICA"         → "Imagen cultural"
+        "PERSPECTIVA POLÍTICA DE MÉXICO: DIMENSIÓN FUNCIONAL"   → "Perspectiva política"
+        "SALIENCIA DE VIOLENCIA EN MÉXICO"                      → "Saliencia de violencia"
+
+    Se queda con lo anterior a los dos puntos —donde la rúbrica pone la
+    dimensión antes del tecnicismo— y le quita el complemento del país, que es
+    el mismo en todos y por tanto no distingue nada.
+    """
+    nombre = str(criterio.get("nombre") or criterio.get("id_criterio") or "").strip()
+    cabeza = nombre.split(":", 1)[0].strip()
+    for sufijo in (" DE MÉXICO", " EN MÉXICO", " DE MEXICO", " EN MEXICO",
+                   " de México", " en México"):
+        if cabeza.upper().endswith(sufijo.upper()):
+            cabeza = cabeza[: -len(sufijo)].strip()
+            break
+    if not cabeza:
+        return nombre or "(sin nombre)"
+    # Las rúbricas vienen en versales; se deja sólo la inicial en mayúscula.
+    return cabeza.capitalize() if cabeza.isupper() else cabeza
+
+
 # ──────────────────────────────────────────────────────────────────────────
 #  Agregación
 # ──────────────────────────────────────────────────────────────────────────
@@ -302,6 +334,7 @@ def agregar(cfg: Config, viz: pd.DataFrame, criterios: list[dict],
 
     orden = {c["slug"]: [str(e) for e in c["etiquetas_validas"]] for c in criterios}
     crits = [{"slug": c["slug"], "id": c["id_criterio"], "nombre": c["nombre"],
+              "etiqueta": etiqueta_criterio(c),
               "niveles": [e for e in orden[c["slug"]]
                           if e not in ausencia.get(c["slug"], set())],
               "ausencia": sorted(ausencia.get(c["slug"], set()))}

@@ -5,6 +5,7 @@
 !.env.example
 apikey.txt
 *.key
+*.json.secret
 
 # ── Entorno ───────────────────────────────────────────────────────────────
 .venv/
@@ -18,26 +19,52 @@ dist/
 .pytest_cache/
 .ipynb_checkpoints/
 
-# ── Corpus ────────────────────────────────────────────────────────────────
-# Decenas de MB de tuits con contenido sensible. Se comparten fuera del repo.
+# ── Datos crudos ──────────────────────────────────────────────────────────
+# Corpus de tuits con contenido sensible y consultas de origen. Decenas de MB.
+# Se comparten fuera del repo (Drive / Colab), nunca por git.
 *.csv
+*.csv.*
+*.tsv
 *.xlsx
 *.xlsm
 *.xls
+*.parquet
+*.feather
+*.pkl
+*.pickle
+turistas_*
+# Los CSV con espacios en el nombre ya quedan cubiertos por *.csv
+datos/
+data/
+raw/
+crudos/
 
 # ── Rúbrica ───────────────────────────────────────────────────────────────
-# El PDF es la fuente de verdad y pesa 4 MB; rubrica.json se regenera de él.
-rubrica_tweets.pdf
+# El PDF es la fuente de verdad; rubrica.json se regenera de él.
+*.pdf
 rubrica.json
 
 # ── Checkpoints y salidas ─────────────────────────────────────────────────
 # Append-only, crecen sin límite y contienen las justificaciones del modelo.
-checkpoint*.jsonl
+checkpoint*
 *.jsonl
+*.jsonl.*
+tweets_calificados*
 graficas_*.html
-tweets_calificados*.csv
+*.log
 
-# ── Sistema ───────────────────────────────────────────────────────────────
+# ── Respaldos y variantes con sufijo ──────────────────────────────────────
+*.bak
+*.bak_*
+*.bak.*
+*.antes
+*.orig
+*.tmp
+*~
+
+# ── Sistema / editor ──────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
 desktop.ini
+.vscode/
+.idea/

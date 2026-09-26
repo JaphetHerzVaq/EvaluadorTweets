@@ -200,7 +200,7 @@ const gSerie = {}, gPer = {};
 D.criterios.forEach(c => {
   const d = document.createElement("div");
   d.className = "panel";
-  d.innerHTML = '<h2>' + c.id + ' · ' + c.nombre + '</h2>' +
+  d.innerHTML = '<h2>' + c.etiqueta + ' <span style="font-weight:400;color:#6b6862">· ' + c.nombre + '</span></h2>' +
     '<p class="nota">Valencia diaria, apilada del más negativo al más positivo. ' +
     'La ausencia (nivel ' + (c.ausencia.join(", ") || "—") + ') no entra en el apilado.</p>' +
     '<div class="grafica" id="g-' + c.slug + '"></div>';
@@ -210,7 +210,7 @@ D.criterios.forEach(c => {
   const p = document.createElement("div");
   p.className = "panel";
   p.style.margin = "0";
-  p.innerHTML = '<h2 style="font-size:13px">' + c.id + '</h2><div class="grafica" ' +
+  p.innerHTML = '<h2 style="font-size:13px">' + c.etiqueta + '</h2><div class="grafica" ' +
     'id="p-' + c.slug + '" style="height:200px"></div>';
   document.getElementById("g-periodos").appendChild(p);
   gPer[c.slug] = echarts.init(p.querySelector(".grafica"));
@@ -248,7 +248,7 @@ function pintar() {
     series: D.criterios.map((c, i) => {
       const { conVal, base, hay } = porCriterio(c.slug);
       const s = fechas.map((_, j) => hay[j] && base[j] ? conVal[j] / base[j] : null);
-      return { name: c.id, type: "line", smooth: false, connectNulls: false,
+      return { name: c.etiqueta, type: "line", smooth: false, connectNulls: false,
                symbolSize: 6, lineStyle: { width: 2 }, data: media(s, D.ventana),
                itemStyle: { color: PAL_IDIOMA[i % PAL_IDIOMA.length] },
                markArea: i === 0 ? bandas() : undefined };
@@ -273,7 +273,7 @@ function pintar() {
     const suma = niv.map(n => fechas.reduce((a, f, j) =>
       a + (filtroFechas(f) ? val[n][j] : 0), 0));
     const t = suma.reduce((a, b) => a + b, 0);
-    return { id: c.id, niv, suma, t };
+    return { id: c.etiqueta, niv, suma, t };
   });
   const pintaBarras = (g, datos, alto) => {
     // Unión de niveles: dos criterios de la misma rúbrica pueden declarar
