@@ -19,11 +19,10 @@ dist/
 .pytest_cache/
 .ipynb_checkpoints/
 
-# ── Datos crudos ──────────────────────────────────────────────────────────
-# Corpus de tuits con contenido sensible y consultas de origen. Decenas de MB.
-# Se comparten fuera del repo (Drive / Colab), nunca por git.
-*.csv
-*.csv.*
+# ── Corpus de tuits ───────────────────────────────────────────────────────
+# Los CSV del corpus y las calificaciones SÍ viajan en el repositorio
+# (repo privado: contienen tuits reales). Se excluyen solo formatos
+# intermedios y respaldos; ver la sección de respaldos más abajo.
 *.tsv
 *.xlsx
 *.xlsm
@@ -32,16 +31,10 @@ dist/
 *.feather
 *.pkl
 *.pickle
-turistas_*
-# Los CSV con espacios en el nombre ya quedan cubiertos por *.csv
-datos/
-data/
-raw/
-crudos/
 
 # ── Rúbrica ───────────────────────────────────────────────────────────────
-# El PDF es la fuente de verdad; rubrica.json se regenera de él.
-*.pdf
+# Los PDF de la rúbrica viajan en el repo (son la fuente de verdad, < 1 MB).
+# rubrica.json se regenera del PDF y no se rastrea.
 rubrica.json
 
 # ── Checkpoints y salidas ─────────────────────────────────────────────────
@@ -49,7 +42,6 @@ rubrica.json
 checkpoint*
 *.jsonl
 *.jsonl.*
-tweets_calificados*
 graficas_*.html
 *.log
 
