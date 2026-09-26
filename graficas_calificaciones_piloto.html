@@ -1,0 +1,352 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Calificaciones por rúbrica</title>
+<style>
+  :root{
+    --surface:#fcfcfb; --plane:#f9f9f7; --ink:#0b0b0b; --ink-2:#52514e;
+    --muted:#898781; --grid:#e1e0d9; --line:#c3c2b7;
+    --borde:rgba(11,11,11,.10);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--plane);color:var(--ink);
+       font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+  .wrap{max-width:1180px;margin:0 auto;padding:24px 16px 64px}
+  h1{font-size:20px;margin:0 0 4px}
+  h2{font-size:15px;margin:0 0 2px;font-weight:600}
+  .sub{color:var(--ink-2);font-size:13px;margin:0 0 20px}
+  .nota{color:var(--muted);font-size:12px;margin:4px 0 0}
+  .panel{background:var(--surface);border:1px solid var(--borde);border-radius:10px;
+         padding:16px;margin:0 0 16px}
+  .controles{position:sticky;top:0;z-index:5;background:var(--surface);
+             border:1px solid var(--borde);border-radius:10px;padding:12px 16px;
+             margin:0 0 16px;display:flex;flex-wrap:wrap;gap:18px;align-items:flex-start}
+  .grupo{display:flex;flex-direction:column;gap:6px}
+  .grupo > span{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;max-width:620px}
+  .chip{border:1px solid var(--line);background:var(--surface);color:var(--ink-2);
+        border-radius:999px;padding:3px 10px;font-size:12px;cursor:pointer;
+        font-variant-numeric:tabular-nums}
+  .chip[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:#fff}
+  .chip small{opacity:.65;margin-left:4px}
+  .chip.sin-idioma{font-style:italic}
+  label.sw{display:flex;gap:6px;align-items:center;font-size:13px;cursor:pointer}
+  .aviso{background:#fff6e6;border:1px solid #f0d9a8;color:#6a4c00;
+         border-radius:8px;padding:10px 14px;margin:0 0 16px;font-size:13px}
+  .aviso:empty{display:none}
+  .grafica{width:100%;height:300px}
+  .trio{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  @media(max-width:820px){.trio{grid-template-columns:1fr}}
+  table{border-collapse:collapse;font-size:12px;width:100%;
+        font-variant-numeric:tabular-nums}
+  th,td{text-align:right;padding:4px 8px;border-bottom:1px solid var(--grid)}
+  th:first-child,td:first-child{text-align:left}
+  .fallo{padding:40px;text-align:center;color:var(--ink-2)}
+</style>
+<div class="wrap">
+  <h1>Calificaciones por rúbrica</h1>
+  <p class="sub">60 tuits · 32 días · 4 criterios · día cortado en America/Mexico_City · PREVIO A MUNDIAL: 15 · DURANTE MUNDIAL EN MEXICO: 23 · DESPUES DE PARTIDOS EN MEXICO: 22</p>
+  <div id="sinlib" class="fallo" hidden>
+    No se pudo cargar la biblioteca de gráficas desde el CDN.<br>
+    La página necesita conexión a <code>cdnjs.cloudflare.com</code>. Los datos
+    están embebidos y siguen en la tabla de cada panel.
+  </div>
+  <div id="app" hidden>
+    <div class="controles">
+      <div class="grupo"><span>Idioma</span><div class="chips" id="f-idioma"></div></div>
+      <div class="grupo"><span>Medida</span>
+        <label class="sw"><input type="radio" name="modo" value="prop" checked> Proporción</label>
+        <label class="sw"><input type="radio" name="modo" value="abs"> Conteo absoluto</label>
+      </div>
+      <div class="grupo"><span>Opciones</span>
+        <label class="sw"><input type="checkbox" id="suav"> Media móvil 7 días</label>
+        <label class="sw"><input type="checkbox" id="auto"> Sólo tuits autosuficientes</label>
+      </div>
+    </div>
+    <div id="aviso" class="aviso"></div>
+    <div class="panel">
+      <h2>Volumen diario del corpus</h2>
+      <p class="nota">Tuits recogidos por día, apilados por idioma. Es el
+         denominador de todo lo demás.</p>
+      <div id="g-volumen" class="grafica"></div>
+    </div>
+    <div class="panel">
+      <h2>Saliencia dimensional</h2>
+      <p class="nota">Proporción diaria de tuits que <em>tocan</em> cada dimensión,
+         es decir que recibieron un nivel de valencia en vez de ausencia. Con un
+         corpus de líneas de tiempo completas, esta es la medida principal.</p>
+      <div id="g-saliencia" class="grafica"></div>
+    </div>
+    <div id="series"></div>
+    <div class="panel">
+      <h2>Distribución de valencia · todo el corpus</h2>
+      <p class="nota">Sólo calificaciones con valencia; la ausencia queda fuera
+         del apilado y se reporta aparte.</p>
+      <div id="g-global" class="grafica" style="height:220px"></div>
+      <div id="t-global"></div>
+    </div>
+    <div class="panel">
+      <h2>Distribución de valencia por período</h2>
+      <p class="nota">Misma escala y mismo orden de niveles en los tres, para que
+         las diferencias se lean como diferencias.</p>
+      <div class="trio" id="g-periodos"></div>
+    </div>
+    <p class="nota">El corpus son las líneas de tiempo completas de un conjunto acotado de cuentas, no una muestra aleatoria de la conversación sobre México. Los cambios entre períodos son coincidencia temporal, no causalidad, y unas pocas cuentas aportan buena parte del volumen: un movimiento en la serie puede ser el humor de una persona.</p>
+  </div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.5.1/echarts.min.js"></script>
+<script>
+const D = {"criterios": [{"slug": "rubrica_1_dimension_simpatic", "id": "RÚBRICA 1", "nombre": "DIMENSIÓN SIMPÁTICA / EMOCIONAL (sympathetic/emotional dimension - \"atmósfera\")", "niveles": ["1", "2", "3", "4", "5"], "ausencia": ["0"]}, {"slug": "rubrica_2_dimension_estetica", "id": "RÚBRICA 2", "nombre": "DIMENSIÓN ESTÉTICA (aesthetic dimension — \"imagen cultural\")", "niveles": ["1", "2", "3", "4", "5"], "ausencia": ["0"]}, {"slug": "rubrica_3_dimension_funciona", "id": "RÚBRICA 3", "nombre": "DIMENSIÓN FUNCIONAL (functional dimension — \"perspectiva política\")", "niveles": ["1", "2", "3", "4", "5"], "ausencia": ["0"]}, {"slug": "rubrica_4_saliencia_de_viole", "id": "RÚBRICA 4", "nombre": "SALIENCIA DE VIOLENCIA (violence salience — binaria 0/1)", "niveles": ["1"], "ausencia": ["0"]}], "fechas": ["2026-06-02", "2026-06-03", "2026-06-04", "2026-06-08", "2026-06-09", "2026-06-10", "2026-06-12", "2026-06-15", "2026-06-16", "2026-06-18", "2026-06-19", "2026-06-22", "2026-06-23", "2026-06-25", "2026-06-26", "2026-06-27", "2026-06-29", "2026-07-02", "2026-07-04", "2026-07-05", "2026-07-06", "2026-07-08", "2026-07-09", "2026-07-10", "2026-07-15", "2026-07-16", "2026-07-17", "2026-07-18", "2026-07-25", "2026-07-26", "2026-07-27", "2026-07-29"], "periodos": [{"nombre": "PREVIO A MUNDIAL", "dias": 6, "tuits": 15, "por_dia": 2.5}, {"nombre": "DURANTE MUNDIAL EN MEXICO", "dias": 14, "tuits": 23, "por_dia": 1.6}, {"nombre": "DESPUES DE PARTIDOS EN MEXICO", "dias": 12, "tuits": 22, "por_dia": 1.8}], "idiomas": [{"codigo": "en", "n": 50, "sin_idioma": false}, {"codigo": "ja", "n": 8, "sin_idioma": false}, {"codigo": "tl", "n": 1, "sin_idioma": false}, {"codigo": "und", "n": 1, "sin_idioma": true}], "agg": [{"fecha_str": "2026-06-02", "slug": "rubrica_1_dimension_simpatic", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-06-02", "slug": "rubrica_1_dimension_simpatic", "clase": "ausencia", "nivel": "", "idioma": "ja", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-06-02", "slug": "rubrica_1_dimension_simpatic", "clase": "ausencia", "nivel": "", "idioma": "ja", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-06-02", "slug": "rubrica_1_dimension_simpatic", "clase": "ausencia", "nivel": "", "idioma": "und", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-06-02", "slug": "rubrica_2_dimension_estetica", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-06-02", "slug": "rubrica_2_dimension_estetica", "clase": "ausencia", "nivel": "", "idioma": "ja", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-06-02", "slug": "rubrica_2_dimension_estetica", "clase": "ausencia", "nivel": "", "idioma": "und", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-06-02", "slug": "rubrica_2_dimension_estetica", "clase": "fallida", "nivel": "", "idioma": "ja", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-06-02", "slug": "rubrica_3_dimension_funciona", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-06-02", "slug": "rubrica_3_dimension_funciona", "clase": "ausencia", "nivel": "", "idioma": "ja", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-06-02", "slug": "rubrica_3_dimension_funciona", "clase": "ausencia", "nivel": "", "idioma": "ja", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-06-02", "slug": "rubrica_3_dimension_funciona", "clase": "ausencia", "nivel": "", "idioma": "und", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-06-02", "slug": "rubrica_4_saliencia_de_viole", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-06-02", "slug": "rubrica_4_saliencia_de_viole", "clase": "ausencia", "nivel": "", "idioma": "ja", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-06-02", "slug": "rubrica_4_saliencia_de_viole", "clase": "ausencia", "nivel": "", "idioma": "ja", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-06-02", "slug": "rubrica_4_saliencia_de_viole", "clase": "ausencia", "nivel": "", "idioma": "und", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-06-03", "slug": "rubrica_1_dimension_simpatic", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-06-03", "slug": "rubrica_2_dimension_estetica", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-06-03", "slug": "rubrica_3_dimension_funciona", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-06-03", "slug": "rubrica_4_saliencia_de_viole", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-06-04", "slug": "rubrica_1_dimension_simpatic", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 2}, {"fecha_str": "2026-06-04", "slug": "rubrica_1_dimension_simpatic", "clase": "ausencia", "nivel": "", "idioma": "ja", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-06-04", "slug": "rubrica_2_dimension_estetica", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 2}, {"fecha_str": "2026-06-04", "slug": "rubrica_2_dimension_estetica", "clase": "ausencia", "nivel": "", "idioma": "ja", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-06-04", "slug": "rubrica_3_dimension_funciona", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 2}, {"fecha_str": "2026-06-04", "slug": "rubrica_3_dimension_funciona", "clase": "ausencia", "nivel": "", "idioma": "ja", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-06-04", "slug": "rubrica_4_saliencia_de_viole", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 2}, {"fecha_str": "2026-06-04", "slug": "rubrica_4_saliencia_de_viole", "clase": "ausencia", "nivel": "", "idioma": "ja", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-06-08", "slug": "rubrica_1_dimension_simpatic", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 2}, {"fecha_str": "2026-06-08", "slug": "rubrica_2_dimension_estetica", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 2}, {"fecha_str": "2026-06-08", "slug": "rubrica_3_dimension_funciona", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 2}, {"fecha_str": "2026-06-08", "slug": "rubrica_4_saliencia_de_viole", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 2}, {"fecha_str": "2026-06-09", "slug": "rubrica_1_dimension_simpatic", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": true, "n": 2}, {"fecha_str": "2026-06-09", "slug": "rubrica_2_dimension_estetica", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": true, "n": 2}, {"fecha_str": "2026-06-09", "slug": "rubrica_3_dimension_funciona", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": true, "n": 2}, {"fecha_str": "2026-06-09", "slug": "rubrica_4_saliencia_de_viole", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": true, "n": 2}, {"fecha_str": "2026-06-10", "slug": "rubrica_1_dimension_simpatic", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 3}, {"fecha_str": "2026-06-10", "slug": "rubrica_2_dimension_estetica", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 3}, {"fecha_str": "2026-06-10", "slug": "rubrica_3_dimension_funciona", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 2}, {"fecha_str": "2026-06-10", "slug": "rubrica_3_dimension_funciona", "clase": "valencia", "nivel": "4", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-06-10", "slug": "rubrica_4_saliencia_de_viole", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 3}, {"fecha_str": "2026-06-12", "slug": "rubrica_1_dimension_simpatic", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-06-12", "slug": "rubrica_1_dimension_simpatic", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-06-12", "slug": "rubrica_2_dimension_estetica", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-06-12", "slug": "rubrica_2_dimension_estetica", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-06-12", "slug": "rubrica_3_dimension_funciona", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-06-12", "slug": "rubrica_3_dimension_funciona", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-06-12", "slug": "rubrica_4_saliencia_de_viole", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-06-12", "slug": "rubrica_4_saliencia_de_viole", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-06-15", "slug": "rubrica_1_dimension_simpatic", "clase": "valencia", "nivel": "1", "idioma": "en", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-06-15", "slug": "rubrica_2_dimension_estetica", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-06-15", "slug": "rubrica_3_dimension_funciona", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-06-15", "slug": "rubrica_4_saliencia_de_viole", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-06-16", "slug": "rubrica_1_dimension_simpatic", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-06-16", "slug": "rubrica_2_dimension_estetica", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-06-16", "slug": "rubrica_3_dimension_funciona", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-06-16", "slug": "rubrica_4_saliencia_de_viole", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-06-18", "slug": "rubrica_1_dimension_simpatic", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-06-18", "slug": "rubrica_2_dimension_estetica", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-06-18", "slug": "rubrica_3_dimension_funciona", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-06-18", "slug": "rubrica_4_saliencia_de_viole", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-06-19", "slug": "rubrica_1_dimension_simpatic", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-06-19", "slug": "rubrica_1_dimension_simpatic", "clase": "ausencia", "nivel": "", "idioma": "tl", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-06-19", "slug": "rubrica_1_dimension_simpatic", "clase": "valencia", "nivel": "4", "idioma": "en", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-06-19", "slug": "rubrica_2_dimension_estetica", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-06-19", "slug": "rubrica_2_dimension_estetica", "clase": "ausencia", "nivel": "", "idioma": "tl", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-06-19", "slug": "rubrica_2_dimension_estetica", "clase": "valencia", "nivel": "4", "idioma": "en", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-06-19", "slug": "rubrica_3_dimension_funciona", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": true, "n": 2}, {"fecha_str": "2026-06-19", "slug": "rubrica_3_dimension_funciona", "clase": "ausencia", "nivel": "", "idioma": "tl", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-06-19", "slug": "rubrica_4_saliencia_de_viole", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": true, "n": 2}, {"fecha_str": "2026-06-19", "slug": "rubrica_4_saliencia_de_viole", "clase": "ausencia", "nivel": "", "idioma": "tl", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-06-22", "slug": "rubrica_1_dimension_simpatic", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": true, "n": 2}, {"fecha_str": "2026-06-22", "slug": "rubrica_2_dimension_estetica", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": true, "n": 2}, {"fecha_str": "2026-06-22", "slug": "rubrica_3_dimension_funciona", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": true, "n": 2}, {"fecha_str": "2026-06-22", "slug": "rubrica_4_saliencia_de_viole", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": true, "n": 2}, {"fecha_str": "2026-06-23", "slug": "rubrica_1_dimension_simpatic", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 2}, {"fecha_str": "2026-06-23", "slug": "rubrica_2_dimension_estetica", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 2}, {"fecha_str": "2026-06-23", "slug": "rubrica_3_dimension_funciona", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 2}, {"fecha_str": "2026-06-23", "slug": "rubrica_4_saliencia_de_viole", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 2}, {"fecha_str": "2026-06-25", "slug": "rubrica_1_dimension_simpatic", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-06-25", "slug": "rubrica_2_dimension_estetica", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-06-25", "slug": "rubrica_3_dimension_funciona", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-06-25", "slug": "rubrica_4_saliencia_de_viole", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-06-26", "slug": "rubrica_1_dimension_simpatic", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-06-26", "slug": "rubrica_2_dimension_estetica", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-06-26", "slug": "rubrica_3_dimension_funciona", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-06-26", "slug": "rubrica_4_saliencia_de_viole", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-06-27", "slug": "rubrica_1_dimension_simpatic", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-06-27", "slug": "rubrica_2_dimension_estetica", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-06-27", "slug": "rubrica_3_dimension_funciona", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-06-27", "slug": "rubrica_4_saliencia_de_viole", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-06-29", "slug": "rubrica_1_dimension_simpatic", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-06-29", "slug": "rubrica_1_dimension_simpatic", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-06-29", "slug": "rubrica_2_dimension_estetica", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-06-29", "slug": "rubrica_2_dimension_estetica", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-06-29", "slug": "rubrica_3_dimension_funciona", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-06-29", "slug": "rubrica_3_dimension_funciona", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-06-29", "slug": "rubrica_4_saliencia_de_viole", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-06-29", "slug": "rubrica_4_saliencia_de_viole", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-07-02", "slug": "rubrica_1_dimension_simpatic", "clase": "ausencia", "nivel": "", "idioma": "ja", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-07-02", "slug": "rubrica_2_dimension_estetica", "clase": "ausencia", "nivel": "", "idioma": "ja", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-07-02", "slug": "rubrica_3_dimension_funciona", "clase": "ausencia", "nivel": "", "idioma": "ja", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-07-02", "slug": "rubrica_4_saliencia_de_viole", "clase": "ausencia", "nivel": "", "idioma": "ja", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-07-04", "slug": "rubrica_1_dimension_simpatic", "clase": "valencia", "nivel": "1", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-07-04", "slug": "rubrica_2_dimension_estetica", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-07-04", "slug": "rubrica_3_dimension_funciona", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-07-04", "slug": "rubrica_4_saliencia_de_viole", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-07-05", "slug": "rubrica_1_dimension_simpatic", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 3}, {"fecha_str": "2026-07-05", "slug": "rubrica_1_dimension_simpatic", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-07-05", "slug": "rubrica_2_dimension_estetica", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 3}, {"fecha_str": "2026-07-05", "slug": "rubrica_2_dimension_estetica", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-07-05", "slug": "rubrica_3_dimension_funciona", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 3}, {"fecha_str": "2026-07-05", "slug": "rubrica_3_dimension_funciona", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-07-05", "slug": "rubrica_4_saliencia_de_viole", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 3}, {"fecha_str": "2026-07-05", "slug": "rubrica_4_saliencia_de_viole", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-07-06", "slug": "rubrica_1_dimension_simpatic", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-07-06", "slug": "rubrica_1_dimension_simpatic", "clase": "ausencia", "nivel": "", "idioma": "ja", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-07-06", "slug": "rubrica_1_dimension_simpatic", "clase": "valencia", "nivel": "5", "idioma": "en", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-07-06", "slug": "rubrica_2_dimension_estetica", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": true, "n": 2}, {"fecha_str": "2026-07-06", "slug": "rubrica_2_dimension_estetica", "clase": "ausencia", "nivel": "", "idioma": "ja", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-07-06", "slug": "rubrica_3_dimension_funciona", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": true, "n": 2}, {"fecha_str": "2026-07-06", "slug": "rubrica_3_dimension_funciona", "clase": "ausencia", "nivel": "", "idioma": "ja", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-07-06", "slug": "rubrica_4_saliencia_de_viole", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": true, "n": 2}, {"fecha_str": "2026-07-06", "slug": "rubrica_4_saliencia_de_viole", "clase": "ausencia", "nivel": "", "idioma": "ja", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-07-08", "slug": "rubrica_1_dimension_simpatic", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-07-08", "slug": "rubrica_2_dimension_estetica", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-07-08", "slug": "rubrica_3_dimension_funciona", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-07-08", "slug": "rubrica_4_saliencia_de_viole", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-07-09", "slug": "rubrica_1_dimension_simpatic", "clase": "ausencia", "nivel": "", "idioma": "ja", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-07-09", "slug": "rubrica_2_dimension_estetica", "clase": "ausencia", "nivel": "", "idioma": "ja", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-07-09", "slug": "rubrica_3_dimension_funciona", "clase": "ausencia", "nivel": "", "idioma": "ja", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-07-09", "slug": "rubrica_4_saliencia_de_viole", "clase": "ausencia", "nivel": "", "idioma": "ja", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-07-10", "slug": "rubrica_1_dimension_simpatic", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-07-10", "slug": "rubrica_2_dimension_estetica", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-07-10", "slug": "rubrica_3_dimension_funciona", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-07-10", "slug": "rubrica_4_saliencia_de_viole", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-07-15", "slug": "rubrica_1_dimension_simpatic", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-07-15", "slug": "rubrica_2_dimension_estetica", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-07-15", "slug": "rubrica_3_dimension_funciona", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-07-15", "slug": "rubrica_4_saliencia_de_viole", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-07-16", "slug": "rubrica_1_dimension_simpatic", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-07-16", "slug": "rubrica_1_dimension_simpatic", "clase": "ausencia", "nivel": "", "idioma": "ja", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-07-16", "slug": "rubrica_2_dimension_estetica", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-07-16", "slug": "rubrica_2_dimension_estetica", "clase": "ausencia", "nivel": "", "idioma": "ja", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-07-16", "slug": "rubrica_3_dimension_funciona", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-07-16", "slug": "rubrica_3_dimension_funciona", "clase": "ausencia", "nivel": "", "idioma": "ja", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-07-16", "slug": "rubrica_4_saliencia_de_viole", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-07-16", "slug": "rubrica_4_saliencia_de_viole", "clase": "ausencia", "nivel": "", "idioma": "ja", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-07-17", "slug": "rubrica_1_dimension_simpatic", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-07-17", "slug": "rubrica_1_dimension_simpatic", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": true, "n": 2}, {"fecha_str": "2026-07-17", "slug": "rubrica_2_dimension_estetica", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-07-17", "slug": "rubrica_2_dimension_estetica", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": true, "n": 2}, {"fecha_str": "2026-07-17", "slug": "rubrica_3_dimension_funciona", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-07-17", "slug": "rubrica_3_dimension_funciona", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": true, "n": 2}, {"fecha_str": "2026-07-17", "slug": "rubrica_4_saliencia_de_viole", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-07-17", "slug": "rubrica_4_saliencia_de_viole", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": true, "n": 2}, {"fecha_str": "2026-07-18", "slug": "rubrica_1_dimension_simpatic", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 3}, {"fecha_str": "2026-07-18", "slug": "rubrica_2_dimension_estetica", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 3}, {"fecha_str": "2026-07-18", "slug": "rubrica_3_dimension_funciona", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 3}, {"fecha_str": "2026-07-18", "slug": "rubrica_4_saliencia_de_viole", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 3}, {"fecha_str": "2026-07-25", "slug": "rubrica_1_dimension_simpatic", "clase": "ausencia", "nivel": "", "idioma": "ja", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-07-25", "slug": "rubrica_2_dimension_estetica", "clase": "ausencia", "nivel": "", "idioma": "ja", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-07-25", "slug": "rubrica_3_dimension_funciona", "clase": "ausencia", "nivel": "", "idioma": "ja", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-07-25", "slug": "rubrica_4_saliencia_de_viole", "clase": "ausencia", "nivel": "", "idioma": "ja", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-07-26", "slug": "rubrica_1_dimension_simpatic", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 2}, {"fecha_str": "2026-07-26", "slug": "rubrica_2_dimension_estetica", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 2}, {"fecha_str": "2026-07-26", "slug": "rubrica_3_dimension_funciona", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 2}, {"fecha_str": "2026-07-26", "slug": "rubrica_4_saliencia_de_viole", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 2}, {"fecha_str": "2026-07-27", "slug": "rubrica_1_dimension_simpatic", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 3}, {"fecha_str": "2026-07-27", "slug": "rubrica_2_dimension_estetica", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 3}, {"fecha_str": "2026-07-27", "slug": "rubrica_3_dimension_funciona", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 3}, {"fecha_str": "2026-07-27", "slug": "rubrica_4_saliencia_de_viole", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 3}, {"fecha_str": "2026-07-29", "slug": "rubrica_1_dimension_simpatic", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-07-29", "slug": "rubrica_2_dimension_estetica", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-07-29", "slug": "rubrica_3_dimension_funciona", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-07-29", "slug": "rubrica_4_saliencia_de_viole", "clase": "ausencia", "nivel": "", "idioma": "en", "autosuficiente": false, "n": 1}], "volumen": [{"fecha_str": "2026-06-02", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-06-02", "idioma": "ja", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-06-02", "idioma": "ja", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-06-02", "idioma": "und", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-06-03", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-06-04", "idioma": "en", "autosuficiente": false, "n": 2}, {"fecha_str": "2026-06-04", "idioma": "ja", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-06-08", "idioma": "en", "autosuficiente": false, "n": 2}, {"fecha_str": "2026-06-09", "idioma": "en", "autosuficiente": true, "n": 2}, {"fecha_str": "2026-06-10", "idioma": "en", "autosuficiente": false, "n": 3}, {"fecha_str": "2026-06-12", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-06-12", "idioma": "en", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-06-15", "idioma": "en", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-06-16", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-06-18", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-06-19", "idioma": "en", "autosuficiente": true, "n": 2}, {"fecha_str": "2026-06-19", "idioma": "tl", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-06-22", "idioma": "en", "autosuficiente": true, "n": 2}, {"fecha_str": "2026-06-23", "idioma": "en", "autosuficiente": false, "n": 2}, {"fecha_str": "2026-06-25", "idioma": "en", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-06-26", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-06-27", "idioma": "en", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-06-29", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-06-29", "idioma": "en", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-07-02", "idioma": "ja", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-07-04", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-07-05", "idioma": "en", "autosuficiente": false, "n": 3}, {"fecha_str": "2026-07-05", "idioma": "en", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-07-06", "idioma": "en", "autosuficiente": true, "n": 2}, {"fecha_str": "2026-07-06", "idioma": "ja", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-07-08", "idioma": "en", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-07-09", "idioma": "ja", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-07-10", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-07-15", "idioma": "en", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-07-16", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-07-16", "idioma": "ja", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-07-17", "idioma": "en", "autosuficiente": false, "n": 1}, {"fecha_str": "2026-07-17", "idioma": "en", "autosuficiente": true, "n": 2}, {"fecha_str": "2026-07-18", "idioma": "en", "autosuficiente": false, "n": 3}, {"fecha_str": "2026-07-25", "idioma": "ja", "autosuficiente": true, "n": 1}, {"fecha_str": "2026-07-26", "idioma": "en", "autosuficiente": false, "n": 2}, {"fecha_str": "2026-07-27", "idioma": "en", "autosuficiente": false, "n": 3}, {"fecha_str": "2026-07-29", "idioma": "en", "autosuficiente": false, "n": 1}], "umbral_muestra": 100, "ventana": 7, "cortes": [{"nombre": "PREVIO A MUNDIAL", "desde": "2026-05-31", "hasta": "2026-06-11"}, {"nombre": "DURANTE MUNDIAL EN MEXICO", "desde": "2026-06-11", "hasta": "2026-07-06"}, {"nombre": "DESPUES DE PARTIDOS EN MEXICO", "desde": "2026-07-06", "hasta": null}]};
+const PAL = ["#c62f2e", "#e8716f", "#c3c2b7", "#6da7ec", "#1c5cab"], PAL_IDIOMA = ["#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#4a3aa7", "#898781"], C_AUS = "#898781";
+const INK="#0b0b0b", INK2="#52514e", MUTED="#898781", GRID="#e1e0d9", SURF="#fcfcfb";
+
+if (!window.echarts) { document.getElementById("sinlib").hidden = false; }
+else {
+document.getElementById("app").hidden = false;
+
+const sel = new Set(D.idiomas.map(x => x.codigo));
+let modo = "prop", suavizar = false, soloAuto = false;
+
+// ── Controles ──────────────────────────────────────────────────────────
+const cont = document.getElementById("f-idioma");
+D.idiomas.forEach(x => {
+  const b = document.createElement("button");
+  b.className = "chip" + (x.sin_idioma ? " sin-idioma" : "");
+  b.setAttribute("aria-pressed", "true");
+  b.innerHTML = x.codigo + " <small>" + x.n.toLocaleString("es") + "</small>";
+  if (x.sin_idioma) b.title = "No es un idioma: la API lo usa cuando no hay texto del cual inferirlo";
+  b.onclick = () => {
+    if (sel.has(x.codigo)) { sel.delete(x.codigo); b.setAttribute("aria-pressed","false"); }
+    else { sel.add(x.codigo); b.setAttribute("aria-pressed","true"); }
+    pintar();
+  };
+  cont.appendChild(b);
+});
+document.querySelectorAll('input[name=modo]').forEach(r =>
+  r.onchange = e => { modo = e.target.value; pintar(); });
+document.getElementById("suav").onchange = e => { suavizar = e.target.checked; pintar(); };
+document.getElementById("auto").onchange = e => { soloAuto = e.target.checked; pintar(); };
+
+// ── Reducciones sobre el agregado ──────────────────────────────────────
+const pasa = r => sel.has(r.idioma) && (!soloAuto || r.autosuficiente === true);
+const fechas = D.fechas;
+const idx = Object.fromEntries(fechas.map((f, i) => [f, i]));
+
+function media(serie, k) {                    // media móvil centrada, ignora huecos
+  if (!suavizar) return serie;
+  const m = Math.floor(k / 2);
+  return serie.map((_, i) => {
+    let s = 0, n = 0;
+    for (let j = Math.max(0, i - m); j <= Math.min(serie.length - 1, i + m); j++)
+      if (serie[j] !== null) { s += serie[j]; n++; }
+    return n ? s / n : null;
+  });
+}
+
+function porCriterio(slug) {
+  const niv = D.criterios.find(c => c.slug === slug).niveles;
+  const val = Object.fromEntries(niv.map(n => [n, fechas.map(() => 0)]));
+  const conVal = fechas.map(() => 0);   // calificaciones con valencia
+  const aus = fechas.map(() => 0);      // ausencia: nivel 0 o no aplicable
+  const fal = fechas.map(() => 0);      // fallidas: no sabemos, no son ninguna de las dos
+  const hay = fechas.map(() => false);
+  D.agg.filter(r => r.slug === slug && pasa(r)).forEach(r => {
+    const i = idx[r.fecha_str]; if (i === undefined) return;
+    hay[i] = true;
+    if (r.clase === "valencia" && val[r.nivel]) { val[r.nivel][i] += r.n; conVal[i] += r.n; }
+    else if (r.clase === "ausencia") aus[i] += r.n;
+    else fal[i] += r.n;
+  });
+  // Denominador de la saliencia: valencia + ausencia. Las fallidas quedan fuera
+  // de ambos lados — una calificación que reventó no dice que el tuit tocara la
+  // dimensión ni que no la tocara, y meterla en el denominador la contaría como
+  // ausencia, o en el numerador como saliencia. Se reportan aparte.
+  const base = fechas.map((_, i) => conVal[i] + aus[i]);
+  return { niv, val, conVal, aus, fal, base, hay };
+}
+
+function ejeY() {
+  return { type: "value", axisLabel: { color: MUTED,
+             formatter: modo === "prop" ? (v => Math.round(v * 100) + "%") : undefined },
+           splitLine: { lineStyle: { color: GRID } },
+           max: modo === "prop" ? 1 : null };
+}
+const ejeX = () => ({ type: "category", data: fechas, boundaryGap: false,
+  axisLabel: { color: MUTED, formatter: v => v.slice(5) },
+  axisLine: { lineStyle: { color: "#c3c2b7" } } });
+
+const bandas = () => ({ silent: true, symbol: "none", data: D.cortes.map((p, i) => ([
+  { xAxis: p.desde, itemStyle: { color: i % 2 ? "rgba(11,11,11,.035)" : "rgba(11,11,11,.015)" },
+    label: { show: true, formatter: p.nombre, color: MUTED, fontSize: 10,
+             position: "insideTop", rotate: 0 } },
+  { xAxis: p.hasta || fechas[fechas.length - 1] } ])) });
+
+const baseOpt = () => ({
+  backgroundColor: "transparent",
+  grid: { left: 52, right: 16, top: 28, bottom: 34 },
+  tooltip: { trigger: "axis", axisPointer: { type: "cross", label: { show: false } },
+             valueFormatter: v => v === null ? "—"
+               : (modo === "prop" ? (v * 100).toFixed(1) + "%" : Math.round(v)) },
+  legend: { top: 0, textStyle: { color: INK2, fontSize: 11 }, itemHeight: 8, itemWidth: 12 },
+});
+
+// ── Gráficas ───────────────────────────────────────────────────────────
+const gVol = echarts.init(document.getElementById("g-volumen"));
+const gSal = echarts.init(document.getElementById("g-saliencia"));
+const gGlo = echarts.init(document.getElementById("g-global"));
+const gSerie = {}, gPer = {};
+
+D.criterios.forEach(c => {
+  const d = document.createElement("div");
+  d.className = "panel";
+  d.innerHTML = '<h2>' + c.id + ' · ' + c.nombre + '</h2>' +
+    '<p class="nota">Valencia diaria, apilada del más negativo al más positivo. ' +
+    'La ausencia (nivel ' + (c.ausencia.join(", ") || "—") + ') no entra en el apilado.</p>' +
+    '<div class="grafica" id="g-' + c.slug + '"></div>';
+  document.getElementById("series").appendChild(d);
+  gSerie[c.slug] = echarts.init(d.querySelector(".grafica"));
+
+  const p = document.createElement("div");
+  p.className = "panel";
+  p.style.margin = "0";
+  p.innerHTML = '<h2 style="font-size:13px">' + c.id + '</h2><div class="grafica" ' +
+    'id="p-' + c.slug + '" style="height:200px"></div>';
+  document.getElementById("g-periodos").appendChild(p);
+  gPer[c.slug] = echarts.init(p.querySelector(".grafica"));
+});
+
+function pintar() {
+  const nSel = D.idiomas.filter(x => sel.has(x.codigo)).reduce((a, b) => a + b.n, 0);
+  const av = document.getElementById("aviso");
+  if (sel.size === 0) av.textContent = "Ningún idioma seleccionado: no hay datos que mostrar.";
+  else if (nSel < D.umbral_muestra)
+    av.textContent = "La selección deja " + nSel.toLocaleString("es") + " tuits, por debajo de "
+      + D.umbral_muestra + ". A esa densidad la serie diaria describe unos pocos tuits, no una tendencia.";
+  else av.textContent = "";
+
+  // Volumen por idioma
+  const vol = {};
+  D.volumen.filter(pasa).forEach(r => {
+    (vol[r.idioma] = vol[r.idioma] || fechas.map(() => 0))[idx[r.fecha_str]] += r.n;
+  });
+  const idiomasOrden = D.idiomas.map(x => x.codigo).filter(c => vol[c]);
+  gVol.setOption({ ...baseOpt(), xAxis: ejeX(),
+    yAxis: { type: "value", axisLabel: { color: MUTED }, splitLine: { lineStyle: { color: GRID } } },
+    series: idiomasOrden.map((c, i) => ({
+      name: c, type: "bar", stack: "v", data: vol[c],
+      itemStyle: { color: PAL_IDIOMA[i % PAL_IDIOMA.length],
+                   borderColor: SURF, borderWidth: 2 } })),
+    markArea: undefined }, true);
+
+  // Saliencia: proporción que toca cada dimensión
+  gSal.setOption({ ...baseOpt(), xAxis: ejeX(),
+    yAxis: { type: "value", max: modo === "prop" ? null : null,
+             axisLabel: { color: MUTED, formatter: v => Math.round(v * 100) + "%" },
+             splitLine: { lineStyle: { color: GRID } } },
+    tooltip: { trigger: "axis", valueFormatter: v => v === null ? "—" : (v * 100).toFixed(1) + "%" },
+    series: D.criterios.map((c, i) => {
+      const { conVal, base, hay } = porCriterio(c.slug);
+      const s = fechas.map((_, j) => hay[j] && base[j] ? conVal[j] / base[j] : null);
+      return { name: c.id, type: "line", smooth: false, connectNulls: false,
+               symbolSize: 6, lineStyle: { width: 2 }, data: media(s, D.ventana),
+               itemStyle: { color: PAL_IDIOMA[i % PAL_IDIOMA.length] },
+               markArea: i === 0 ? bandas() : undefined };
+    }) }, true);
+
+  // Serie diaria por criterio
+  D.criterios.forEach(c => {
+    const { niv, val, hay } = porCriterio(c.slug);
+    const den = fechas.map((_, j) => niv.reduce((a, n) => a + val[n][j], 0));
+    gSerie[c.slug].setOption({ ...baseOpt(), xAxis: ejeX(), yAxis: ejeY(),
+      series: niv.map((n, i) => ({
+        name: n, type: "bar", stack: "s",
+        data: fechas.map((_, j) => !hay[j] || (modo === "prop" && !den[j]) ? null
+          : (modo === "prop" ? val[n][j] / den[j] : val[n][j])),
+        itemStyle: { color: PAL[i % PAL.length], borderColor: SURF, borderWidth: 2 },
+        markArea: i === 0 ? bandas() : undefined })) }, true);
+  });
+
+  // Distribución global y por período
+  const barra = (filtroFechas) => D.criterios.map(c => {
+    const { niv, val } = porCriterio(c.slug);
+    const suma = niv.map(n => fechas.reduce((a, f, j) =>
+      a + (filtroFechas(f) ? val[n][j] : 0), 0));
+    const t = suma.reduce((a, b) => a + b, 0);
+    return { id: c.id, niv, suma, t };
+  });
+  const pintaBarras = (g, datos, alto) => {
+    // Unión de niveles: dos criterios de la misma rúbrica pueden declarar
+    // escalas distintas, y una barra apilada necesita un vocabulario común.
+    const niv = [];
+    D.criterios.forEach(c => c.niveles.forEach(n => { if (!niv.includes(n)) niv.push(n); }));
+    g.setOption({ ...baseOpt(),
+      grid: { left: 78, right: 16, top: 28, bottom: 24 },
+      xAxis: { type: "value", max: modo === "prop" ? 1 : null,
+               axisLabel: { color: MUTED, formatter: modo === "prop" ? (v => Math.round(v*100)+"%") : undefined },
+               splitLine: { lineStyle: { color: GRID } } },
+      yAxis: { type: "category", data: datos.map(d => d.id).reverse(),
+               axisLabel: { color: INK2 }, axisLine: { lineStyle: { color: "#c3c2b7" } } },
+      tooltip: { trigger: "axis", axisPointer: { type: "shadow" },
+                 valueFormatter: v => modo === "prop" ? (v*100).toFixed(1)+"%" : Math.round(v) },
+      series: niv.map((n, i) => ({
+        name: n, type: "bar", stack: "g",
+        data: datos.map(d => {
+          const k = d.niv.indexOf(n);
+          if (k < 0) return 0;
+          return modo === "prop" ? (d.t ? d.suma[k] / d.t : 0) : d.suma[k];
+        }).reverse(),
+        itemStyle: { color: PAL[i % PAL.length], borderColor: SURF, borderWidth: 2 } })) }, true);
+  };
+  pintaBarras(gGlo, barra(() => true));
+  D.criterios.forEach(c => {
+    const g = gPer[c.slug];
+    const niv = c.niveles;
+    const filas = D.cortes.map(p => {
+      const dentro = f => f >= p.desde && (!p.hasta || f < p.hasta);
+      const { val } = porCriterio(c.slug);
+      const suma = niv.map(n => fechas.reduce((a, f, j) => a + (dentro(f) ? val[n][j] : 0), 0));
+      const t = suma.reduce((a, b) => a + b, 0);
+      return { nombre: p.nombre, suma, t };
+    });
+    g.setOption({ ...baseOpt(),
+      grid: { left: 96, right: 16, top: 28, bottom: 24 },
+      xAxis: { type: "value", max: modo === "prop" ? 1 : null,
+               axisLabel: { color: MUTED, fontSize: 10,
+                 formatter: modo === "prop" ? (v => Math.round(v*100)+"%") : undefined },
+               splitLine: { lineStyle: { color: GRID } } },
+      yAxis: { type: "category", data: filas.map(f => f.nombre.split(" ")[0] + " (" + f.t + ")").reverse(),
+               axisLabel: { color: INK2, fontSize: 10 } },
+      tooltip: { trigger: "axis", axisPointer: { type: "shadow" },
+                 valueFormatter: v => modo === "prop" ? (v*100).toFixed(1)+"%" : Math.round(v) },
+      legend: { show: false },
+      series: niv.map((n, i) => ({
+        name: n, type: "bar", stack: "p",
+        data: filas.map(f => modo === "prop" ? (f.t ? f.suma[i] / f.t : 0) : f.suma[i]).reverse(),
+        itemStyle: { color: PAL[i % PAL.length], borderColor: SURF, borderWidth: 2 } })) }, true);
+  });
+
+  // Tabla de respaldo: identidad nunca queda sólo en el color
+  const dg = barra(() => true);
+  const nivU = [];
+  D.criterios.forEach(c => c.niveles.forEach(n => { if (!nivU.includes(n)) nivU.push(n); }));
+  let html = "<table><tr><th>criterio</th>" +
+    nivU.map(n => "<th>" + n + "</th>").join("") +
+    "<th>n</th></tr>";
+  dg.forEach(d => {
+    html += "<tr><td>" + d.id + "</td>" +
+      nivU.map(n => { const i = d.niv.indexOf(n);
+        return "<td>" + (i < 0 ? "—" : (modo === "prop"
+          ? (d.t ? (d.suma[i] / d.t * 100).toFixed(1) + "%" : "—")
+          : d.suma[i].toLocaleString("es"))) + "</td>"; }).join("") +
+      "<td>" + d.t.toLocaleString("es") + "</td></tr>";
+  });
+  document.getElementById("t-global").innerHTML = html + "</table>";
+}
+
+pintar();
+addEventListener("resize", () => {
+  [gVol, gSal, gGlo, ...Object.values(gSerie), ...Object.values(gPer)]
+    .forEach(g => g.resize());
+});
+}
+</script>

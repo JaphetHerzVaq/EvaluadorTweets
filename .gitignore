@@ -39,10 +39,10 @@ rubrica.json
 
 # ── Checkpoints y salidas ─────────────────────────────────────────────────
 # Append-only, crecen sin límite y contienen las justificaciones del modelo.
+# Las gráficas HTML generadas (graficas_*.html) sí se rastrean.
 checkpoint*
 *.jsonl
 *.jsonl.*
-graficas_*.html
 *.log
 
 # ── Respaldos y variantes con sufijo ──────────────────────────────────────
